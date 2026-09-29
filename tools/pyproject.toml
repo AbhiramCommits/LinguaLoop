@@ -1,0 +1,16 @@
+[project]
+name = "lingualoop-tools"
+version = "0.1.0"
+description = "CLI utilities for the LinguaLoop language-learning platform"
+requires-python = ">=3.12"
+dependencies = [
+    "psycopg[binary]>=3.2",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9",
+]
