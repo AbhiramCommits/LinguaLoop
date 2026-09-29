@@ -29,6 +29,12 @@ public class ContentController {
         return contentService.listLanguages();
     }
 
+    @GetMapping("/languages/{id}/units")
+    @Operation(summary = "List the units of a language")
+    public List<UnitDto> unitsByLanguage(@PathVariable Long id) {
+        return contentService.getUnitsByLanguage(id);
+    }
+
     @GetMapping("/units/{id}")
     @Operation(summary = "Get a unit with its lessons")
     public UnitDto unit(@PathVariable Long id) {

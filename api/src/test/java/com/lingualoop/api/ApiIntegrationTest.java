@@ -61,6 +61,7 @@ class ApiIntegrationTest {
     @Autowired
     ExerciseRepository exercises;
 
+    private Long languageId;
     private Long unitId;
     private Long lessonId;
     private Long exerciseId;
@@ -77,6 +78,7 @@ class ApiIntegrationTest {
         unitId = unit.getId();
         lessonId = lesson.getId();
         exerciseId = exercise.getId();
+        languageId = language.getId();
         token = registerAndLogin();
     }
 
@@ -89,6 +91,10 @@ class ApiIntegrationTest {
         ResponseEntity<Map> unitResponse = rest.getForEntity("/api/units/" + unitId, Map.class);
         assertThat(unitResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(unitResponse.getBody().get("title")).isEqualTo("Saludos");
+
+        ResponseEntity<List> unitsByLanguage = rest.getForEntity("/api/languages/" + languageId + "/units", List.class);
+        assertThat(unitsByLanguage.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(unitsByLanguage.getBody()).hasSize(1);
 
         ResponseEntity<Map> lessonResponse = rest.getForEntity("/api/lessons/" + lessonId, Map.class);
         assertThat(lessonResponse.getStatusCode()).isEqualTo(HttpStatus.OK);

@@ -1,0 +1,118 @@
+:root {
+  font-family: system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  color: #1f2933;
+  background: #f7f9fb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0 0 48px;
+}
+
+header {
+  background: #123b63;
+  color: #fff;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+main {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+section {
+  background: #fff;
+  border: 1px solid #dde3e9;
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-top: 20px;
+}
+
+h2 {
+  font-size: 18px;
+  margin: 0 0 12px;
+}
+
+button {
+  background: #123b63;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #e7edf3;
+  color: #123b63;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+input {
+  padding: 7px 10px;
+  border: 1px solid #c6d0da;
+  border-radius: 6px;
+  font-size: 14px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+ul {
+  padding-left: 20px;
+}
+
+li {
+  margin: 6px 0;
+}
+
+.clickable {
+  cursor: pointer;
+  color: #123b63;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+}
+
+.clickable:hover {
+  text-decoration-color: #123b63;
+}
+
+.error {
+  color: #b3261e;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.muted {
+  color: #5c6b7a;
+  font-size: 13px;
+}
+
+.exercise {
+  border-top: 1px solid #eef2f6;
+  padding: 10px 0;
+}
+
+.grade-buttons button {
+  margin-right: 6px;
+  margin-top: 6px;
+  min-width: 34px;
+}

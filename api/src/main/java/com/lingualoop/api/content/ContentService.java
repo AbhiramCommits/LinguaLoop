@@ -36,6 +36,20 @@ public class ContentService {
     }
 
     @Transactional(readOnly = true)
+    public List<UnitDto> getUnitsByLanguage(Long languageId) {
+        if (!languages.existsById(languageId)) {
+            throw new NotFoundException("Language " + languageId + " not found");
+        }
+        return units.findByLanguageIdOrderByPositionAsc(languageId).stream()
+                .map(unit -> new UnitDto(unit.getId(), languageId, unit.getTitle(), unit.getPosition(),
+                        lessons.findByUnitIdOrderByPositionAsc(unit.getId()).stream()
+                                .map(lesson -> new UnitDto.LessonSummary(lesson.getId(), lesson.getTitle(),
+                                        lesson.getPosition(), exercises.countByLessonId(lesson.getId())))
+                                .toList()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
     public UnitDto getUnit(Long unitId) {
         Unit unit = units.findById(unitId)
                 .orElseThrow(() -> new NotFoundException("Unit " + unitId + " not found"));
