@@ -1,0 +1,20 @@
+app:
+  jwt:
+    secret: integration-test-secret-integration-test-secret-01
+    ttl: 1h
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+  experiment:
+    variants:
+      - key: control
+        weight: 1.0
+  queue:
+    cache-ttl: 5m
+    limit: 50
+  audio:
+    directory: ./build/test-audio
+
+logging:
+  level:
+    com.lingualoop: INFO

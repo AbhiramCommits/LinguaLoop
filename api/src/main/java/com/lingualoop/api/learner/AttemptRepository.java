@@ -15,4 +15,7 @@ public interface AttemptRepository extends JpaRepository<Attempt, Long> {
 
     @Query("select avg(cast(a.grade as double)) from Attempt a where a.session.learner.id = :learnerId")
     Double averageGradeByLearner(@Param("learnerId") Long learnerId);
+
+    @Query("select avg(cast(a.grade as double)) from Attempt a where a.session.id = :sessionId")
+    Double averageGradeBySession(@Param("sessionId") Long sessionId);
 }
