@@ -9,7 +9,7 @@ comprehension, and measures whether learners actually retain material.
 | ---------- | ------------------------------------------------------------------ |
 | `/api`     | Java 21 + Spring Boot 3 REST API (Gradle Kotlin DSL)               |
 | `/web`     | React 18 + TypeScript + Vite web client                            |
-| `/android` | Kotlin Android app (planned; placeholder for now)                  |
+| `/android` | Kotlin + Jetpack Compose Android client (see `docs/porting.md`)     |
 | `/tools`   | Python 3.12 CLI utilities (uv + `pyproject.toml`), incl. `seed.py` |
 | `/infra`   | Docker Compose, Dockerfiles, SQL init scripts                      |
 | `/docs`    | Architecture and design docs                                       |

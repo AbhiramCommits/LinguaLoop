@@ -38,3 +38,13 @@ tools/tts-source/
 
 # Logs
 *.log
+
+# Android
+android/local.properties
+android/app/build/
+android/.gradle/
+android/build/
+android/.idea/
+android/captures/
+*.apk
+*.aab
