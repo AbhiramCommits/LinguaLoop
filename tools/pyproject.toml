@@ -13,4 +13,12 @@ default-groups = ["dev"]
 [dependency-groups]
 dev = [
     "ruff>=0.9",
+    "pytest>=8.3",
 ]
+tts = [
+    "piper-tts>=1.2",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

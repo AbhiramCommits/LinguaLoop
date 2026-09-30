@@ -11,10 +11,9 @@ Usage:
 The script is idempotent: it skips seeding if the Spanish content already
 exists. Pass --reset to drop the existing LinguaLoop Spanish seed first.
 
-Audio assets reference files under /audio/es/lesson-3/... served by the API;
-drop the actual mp3 files into the API's audio directory (APP_AUDIO_DIR) to
-enable playback. Captions carry the transcripts so LISTEN exercises are
-usable even before audio files are present.
+Audio for the LISTEN exercises is produced separately by
+audio_pipeline.py --tts (see CONTENT.md); until then the exercises carry
+only their captions/transcripts.
 """
 
 from __future__ import annotations
@@ -177,17 +176,7 @@ UNIT = {
     ],
 }
 
-AUDIO_ASSETS = [
-    ("es-l3-01", "/audio/es/lesson-3/01-hola-como-estas.mp3", "audio/mpeg", 2100),
-    ("es-l3-02", "/audio/es/lesson-3/02-me-llamo-carmen.mp3", "audio/mpeg", 2400),
-    ("es-l3-03", "/audio/es/lesson-3/03-soy-de-espana.mp3", "audio/mpeg", 2200),
-    ("es-l3-04", "/audio/es/lesson-3/04-buenos-dias-que-tal.mp3", "audio/mpeg", 2600),
-    ("es-l3-05", "/audio/es/lesson-3/05-hablo-un-poco-de-espanol.mp3", "audio/mpeg", 2800),
-    ("es-l3-06", "/audio/es/lesson-3/06-mucho-gusto.mp3", "audio/mpeg", 1900),
-    ("es-l3-07", "/audio/es/lesson-3/07-donde-esta-la-estacion.mp3", "audio/mpeg", 3000),
-    ("es-l3-08", "/audio/es/lesson-3/08-nos-vemos-manana.mp3", "audio/mpeg", 2400),
-]
-
+}
 
 def seed(database_url: str, reset: bool) -> None:
     with psycopg.connect(database_url) as conn:
@@ -221,9 +210,7 @@ def seed(database_url: str, reset: bool) -> None:
                 ).fetchone()[0]
                 exercise_ids = []
                 for exercise_type, prompt, answer, choices, caption in lesson["exercises"]:
-                    audio_id = None
                     if exercise_type == "LISTEN":
-                        audio_id = _audio_asset_id(conn, listen_count)
                         listen_count += 1
                     exercise_id = conn.execute(
                         """
@@ -236,7 +223,7 @@ def seed(database_url: str, reset: bool) -> None:
                             prompt,
                             answer,
                             Jsonb(choices) if choices else None,
-                            audio_id,
+                            None,
                             caption,
                         ),
                     ).fetchone()[0]
@@ -245,18 +232,8 @@ def seed(database_url: str, reset: bool) -> None:
                 print(f"  lesson '{lesson['title']}': {len(exercise_ids)} exercises")
 
     print(f"Seeded Spanish unit (id {unit_id}): 1 unit, 3 lessons, "
-          f"{total_exercises} exercises ({listen_count} LISTEN).")
-
-
-def _audio_asset_id(conn, index: int) -> int:
-    asset_key, url, mime_type, duration_ms = AUDIO_ASSETS[index]
-    return conn.execute(
-        """
-        INSERT INTO audio_asset (asset_key, url, mime_type, duration_ms)
-        VALUES (%s, %s, %s, %s) RETURNING id
-        """,
-        (asset_key, url, mime_type, duration_ms),
-    ).fetchone()[0]
+          f"{total_exercises} exercises ({listen_count} LISTEN). "
+          "Generate audio with: uv run --group tts -- python audio_pipeline.py --tts")
 
 
 def _reset_spanish(conn) -> None:
