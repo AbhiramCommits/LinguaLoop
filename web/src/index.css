@@ -408,6 +408,80 @@ li {
   font-size: 15px;
 }
 
+.hint-row {
+  margin: 8px 0;
+  min-height: 30px;
+}
+
+.hint-content {
+  display: inline-block;
+  margin-left: 10px;
+  background: #f2f6fa;
+  border-left: 4px solid #123b63;
+  padding: 4px 10px;
+  letter-spacing: 1px;
+}
+
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.results-table th,
+.results-table td {
+  border: 1px solid #dde3e9;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.results-table thead th {
+  background: #eef2f6;
+}
+
+.control-badge {
+  margin-left: 8px;
+  font-size: 11px;
+  background: #123b63;
+  color: #fff;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.simulated-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.simulated-toggle input {
+  width: auto;
+  margin: 0;
+}
+
+.simulated-toggle label {
+  font-weight: 400;
+  margin: 0;
+}
+
+.simulated-warning {
+  color: #7c4a03;
+  border-left: 4px solid #7c4a03;
+  background: #fdf3e0;
+  padding: 8px 12px;
+  margin-top: 10px;
+}
+
+.not-enough-data {
+  margin-top: 10px;
+}
+
+.experiment-block {
+  margin-top: 16px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .progressbar-fill {
     transition: none;

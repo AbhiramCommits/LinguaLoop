@@ -228,6 +228,7 @@ export function LessonScreen() {
           exercise={currentExercise}
           feedback={feedbackFor(currentExercise.id)}
           disabled={!session || attempt.isPending}
+          hintDelaySeconds={session?.hintDelaySeconds ?? 0}
           onAnswer={(answer, hintShown) => handleAnswer(currentExercise.id, answer, hintShown)}
         />
       )}

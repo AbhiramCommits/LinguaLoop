@@ -2,6 +2,7 @@ import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { OfflineBanner } from "./offline/OfflineBanner";
 import { BrowseScreen } from "./screens/BrowseScreen";
+import { ExperimentsScreen } from "./screens/ExperimentsScreen";
 import { HomeScreen } from "./screens/HomeScreen";
 import { LessonScreen } from "./screens/LessonScreen";
 import { LoginScreen } from "./screens/LoginScreen";
@@ -42,6 +43,9 @@ export default function App() {
                   <Link to="/browse">Browse</Link>
                 </li>
                 <li>
+                  <Link to="/experiments">Experiments</Link>
+                </li>
+                <li>
                   <span className="header-learner">{learner?.displayName}</span>
                 </li>
                 <li>
@@ -74,6 +78,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <BrowseScreen />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/experiments"
+            element={
+              <RequireAuth>
+                <ExperimentsScreen />
               </RequireAuth>
             }
           />

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Exercise } from "../api/client";
@@ -59,5 +59,21 @@ describe("ListenExercise", () => {
     await user.click(screen.getByRole("button", { name: "Check" }));
 
     expect(onAnswer).toHaveBeenCalledWith("Hola", false);
+  });
+
+  it("gates captions behind the hint delay from the experiment", () => {
+    vi.useFakeTimers();
+    render(
+      <ListenExercise exercise={exercise} disabled={false} hintDelaySeconds={5} onAnswer={vi.fn()} />,
+    );
+
+    expect(screen.getByRole("button", { name: "Captions in 5s" })).toBeDisabled();
+
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(screen.getByRole("button", { name: "Show captions" })).toBeEnabled();
+    vi.useRealTimers();
   });
 });

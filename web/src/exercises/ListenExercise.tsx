@@ -1,10 +1,11 @@
 import { useState, type FormEvent } from "react";
-import { type RendererProps } from "./TranslateExercise";
+import { useHintTimer, type RendererProps } from "./TranslateExercise";
 
-export function ListenExercise({ exercise, disabled, onAnswer }: RendererProps) {
+export function ListenExercise({ exercise, disabled, onAnswer, hintDelaySeconds = 0 }: RendererProps) {
   const [value, setValue] = useState("");
   const [captionsVisible, setCaptionsVisible] = useState(false);
   const captionId = `caption-${exercise.id}`;
+  const hint = useHintTimer(hintDelaySeconds);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -30,9 +31,14 @@ export function ListenExercise({ exercise, disabled, onAnswer }: RendererProps) 
           className="secondary"
           aria-expanded={captionsVisible}
           aria-controls={captionId}
+          disabled={disabled || !hint.ready}
           onClick={() => setCaptionsVisible((visible) => !visible)}
         >
-          {captionsVisible ? "Hide captions" : "Show captions"}
+          {captionsVisible
+            ? "Hide captions"
+            : hint.ready
+              ? "Show captions"
+              : `Captions in ${hint.remaining}s`}
         </button>
         {captionsVisible && (
           <p id={captionId} className="caption">

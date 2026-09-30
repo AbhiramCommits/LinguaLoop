@@ -14,22 +14,39 @@ interface ExerciseCardProps {
   exercise: Exercise;
   feedback: Feedback | null;
   disabled: boolean;
+  hintDelaySeconds?: number;
   onAnswer: (answer: string, hintShown: boolean) => void;
 }
 
-function renderRenderer(exercise: Exercise, disabled: boolean, onAnswer: ExerciseCardProps["onAnswer"]) {
+function renderRenderer(exercise: Exercise, disabled: boolean, hintDelaySeconds: number,
+    onAnswer: ExerciseCardProps["onAnswer"]) {
   switch (exercise.type) {
     case "MULTIPLE_CHOICE":
       return <ChoiceExercise exercise={exercise} disabled={disabled} onAnswer={onAnswer} />;
     case "LISTEN":
-      return <ListenExercise exercise={exercise} disabled={disabled} onAnswer={onAnswer} />;
+      return (
+        <ListenExercise
+          exercise={exercise}
+          disabled={disabled}
+          hintDelaySeconds={hintDelaySeconds}
+          onAnswer={onAnswer}
+        />
+      );
     case "TRANSLATE":
     default:
-      return <TranslateExercise exercise={exercise} disabled={disabled} onAnswer={onAnswer} />;
+      return (
+        <TranslateExercise
+          exercise={exercise}
+          disabled={disabled}
+          hintDelaySeconds={hintDelaySeconds}
+          onAnswer={onAnswer}
+        />
+      );
   }
 }
 
-export function ExerciseCard({ exercise, feedback, disabled, onAnswer }: ExerciseCardProps) {
+export function ExerciseCard({ exercise, feedback, disabled, hintDelaySeconds = 0,
+    onAnswer }: ExerciseCardProps) {
   return (
     <div className="exercise-card">
       <h3>
@@ -38,7 +55,7 @@ export function ExerciseCard({ exercise, feedback, disabled, onAnswer }: Exercis
       </h3>
       {exercise.type !== "MULTIPLE_CHOICE" && <p className="prompt">{exercise.prompt}</p>}
 
-      {renderRenderer(exercise, disabled || feedback !== null, onAnswer)}
+      {renderRenderer(exercise, disabled || feedback !== null, hintDelaySeconds, onAnswer)}
 
       <div className="feedback" role="status" aria-live="polite" aria-atomic="true">
         {feedback && (

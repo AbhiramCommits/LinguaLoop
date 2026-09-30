@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Exercise } from "../api/client";
@@ -49,5 +49,39 @@ describe("TranslateExercise", () => {
     expect(screen.getByRole("button", { name: "Check" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Check" }));
     expect(onAnswer).not.toHaveBeenCalled();
+  });
+
+  it("gates the hint behind the configured delay", () => {
+    vi.useFakeTimers();
+    const onAnswer = vi.fn();
+    render(
+      <TranslateExercise exercise={exercise} disabled={false} hintDelaySeconds={12} onAnswer={onAnswer} />,
+    );
+
+    const hintButton = screen.getByRole("button", { name: "Hint in 12s" });
+    expect(hintButton).toBeDisabled();
+
+    act(() => {
+      vi.advanceTimersByTime(12_000);
+    });
+
+    expect(screen.getByRole("button", { name: "Show hint" })).toBeEnabled();
+    vi.useRealTimers();
+  });
+
+  it("reports hintShown=true when the hint was used before answering", async () => {
+    const user = userEvent.setup();
+    const onAnswer = vi.fn();
+    render(
+      <TranslateExercise exercise={exercise} disabled={false} hintDelaySeconds={0} onAnswer={onAnswer} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Show hint" }));
+    expect(screen.getByText("B_____ d___")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Your translation"), "Buenos dias");
+    await user.click(screen.getByRole("button", { name: "Check" }));
+
+    expect(onAnswer).toHaveBeenCalledWith("Buenos dias", true);
   });
 });

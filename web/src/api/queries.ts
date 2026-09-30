@@ -3,6 +3,8 @@ import {
   apiFetch,
   type AuthResponse,
   type CompleteSessionResponse,
+  type ExperimentDto,
+  type ExperimentResultsDto,
   type Language,
   type Lesson,
   type QueueResponse,
@@ -103,5 +105,24 @@ export function useCompleteSession() {
       apiFetch<CompleteSessionResponse>(`/api/sessions/${sessionId}/complete`, {
         method: "POST",
       }),
+  });
+}
+
+export function useExperiments() {
+  return useQuery({
+    queryKey: ["experiments"],
+    queryFn: () => apiFetch<ExperimentDto[]>("/api/experiments"),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useExperimentResults(experimentKey: string, includeSimulated: boolean) {
+  return useQuery({
+    queryKey: ["experiment-results", experimentKey, includeSimulated],
+    queryFn: () =>
+      apiFetch<ExperimentResultsDto>(
+        `/api/experiments/${experimentKey}/results?includeSimulated=${includeSimulated}`,
+      ),
+    staleTime: 60 * 1000,
   });
 }

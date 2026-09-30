@@ -160,14 +160,6 @@ export interface Stats {
   unit: UnitMastery | null;
 }
 
-export interface SessionDto {
-  id: number;
-  lessonId: number;
-  variantKey: string;
-  startedAt: string;
-  exerciseCount: number;
-}
-
 export interface AttemptResult {
   attemptId: number;
   exerciseId: number;
@@ -182,6 +174,43 @@ export interface CompleteSessionResponse {
   variantKey: string | null;
   attemptCount: number;
   averageGrade: number | null;
+}
+
+export interface SessionDto {
+  id: number;
+  lessonId: number;
+  variantKey: string | null;
+  hintDelaySeconds: number | null;
+  startedAt: string;
+  exerciseCount: number;
+}
+
+export interface ExperimentDto {
+  key: string;
+  description: string;
+  status: "DRAFT" | "RUNNING" | "STOPPED";
+  variants: { key: string; weight: number; control: boolean }[];
+}
+
+export interface VariantResultsDto {
+  key: string;
+  control: boolean;
+  n: number;
+  enoughData: boolean;
+  d1ReturnRate: number | null;
+  d1PValue: number | null;
+  d7ReturnRate: number | null;
+  d7PValue: number | null;
+  meanSecondAttemptAccuracy: number | null;
+  meanItemsPerSession: number | null;
+}
+
+export interface ExperimentResultsDto {
+  experimentKey: string;
+  status: string;
+  controlVariantKey: string;
+  includeSimulated: boolean;
+  variants: VariantResultsDto[];
 }
 
 export function normalizeAnswer(text: string): string {
