@@ -296,6 +296,33 @@ def find_voice_files(voice_name: str, data_dir: Path, download: callable | None)
         ) from exc
 
 
+def make_voice_downloader(download_voices_module) -> callable | None:
+    """Builds a downloader callable from the installed piper-tts API.
+
+    piper-tts 1.x exposes ensure_voice_exists(voice, data_dirs); newer
+    releases expose download_voice(voice, download_dir). Return None when
+    neither exists.
+    """
+    ensure = getattr(download_voices_module, "ensure_voice_exists", None)
+    if ensure is not None:
+        return ensure
+    download = getattr(download_voices_module, "download_voice", None)
+    if download is None:
+        return None
+
+    def downloader(voice_name: str, data_dirs: list) -> tuple[str, str]:
+        data_dir = Path(data_dirs[0])
+        data_dir.mkdir(parents=True, exist_ok=True)
+        download(voice_name, data_dir)
+        onnx = data_dir / f"{voice_name}.onnx"
+        cfg = data_dir / f"{voice_name}.onnx.json"
+        if not onnx.is_file() or not cfg.is_file():
+            raise PipelineError(f"piper reported success but the voice files are missing in {data_dir}")
+        return str(onnx), str(cfg)
+
+    return downloader
+
+
 def voice_license(config_path: str) -> str:
     with open(config_path, encoding="utf-8") as fh:
         return json.load(fh).get("license", "")
@@ -438,7 +465,7 @@ def main() -> None:
             raise PipelineError(
                 "piper-tts is required for --tts mode. Install it with: uv sync --group tts"
             ) from exc
-        download_fn = getattr(download_voices, "ensure_voice_exists", None)
+        download_fn = make_voice_downloader(download_voices)
         voice, license_, _model_path, _cfg_path = load_voice(
             args.tts_voice, Path(args.tts_data_dir), download_fn=download_fn)
         print(f"Loaded voice {args.tts_voice} (license: {license_})")

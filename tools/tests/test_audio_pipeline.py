@@ -246,6 +246,39 @@ def test_tts_accepts_cc0_voice(tmp_path):
     assert license_ == "CC0"
 
 
+def test_downloader_fallback_uses_download_voice_api(tmp_path):
+    class NewPiperApi:
+        def __init__(self):
+            self.called = []
+
+        def download_voice(self, voice_name, download_dir):
+            self.called.append(voice_name)
+            download_dir.mkdir(parents=True, exist_ok=True)
+            (download_dir / f"{voice_name}.onnx").write_bytes(b"model")
+            (download_dir / f"{voice_name}.onnx.json").write_text('{"license": "CC0"}')
+
+    module = NewPiperApi()
+    downloader = ap.make_voice_downloader(module)
+    assert downloader is not None
+
+    model, cfg = downloader("es_ES-mls_10246-low", [tmp_path])
+    assert Path(model).is_file()
+    assert Path(cfg).is_file()
+    assert module.called == ["es_ES-mls_10246-low"]
+
+    # ensure_voice_exists API wins when present
+    class OldPiperApi:
+        def ensure_voice_exists(self, voice_name, data_dirs):
+            return "m", "c"
+
+    assert ap.make_voice_downloader(OldPiperApi()).__name__ == "ensure_voice_exists"
+
+    class NoApi:
+        pass
+
+    assert ap.make_voice_downloader(NoApi()) is None
+
+
 def test_tts_accepts_cc_by_and_rejects_cc_by_nc():
     assert ap.is_redistributable("CC BY 4.0")
     assert ap.is_redistributable("CC-BY-4.0")
