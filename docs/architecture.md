@@ -50,29 +50,46 @@ what a learner sees on a "review day".
 
 ## Review scheduling (SM-2 variant)
 
-On every attempt the scheduler updates `review_state`:
+On every attempt `Sm2Scheduler` (pure, dependency-free) computes the new
+`review_state` values:
 
-- First time an exercise is graded: `repetitions = 1`; interval is 1 day if
-  `grade >= 3`, else 0 days (due again immediately).
-- Subsequent reviews, `grade >= 3`: `interval = interval * ease_factor`
-  (minimum 1 day for the second review), `ease` nudged up.
-- Any `grade < 3`: `lapses += 1`, `repetitions = 0`, interval reset to 1 day.
+- `grade < 3` (failed recall): `repetitions = 0`, `interval_days = 1`,
+  `lapses + 1`, ease factor floored at 1.3.
+- `grade >= 3` (successful recall): `repetitions + 1`; interval 1 day after
+  the first success, 6 days after the second, then
+  `round(intervalDays * easeFactor)`; ease factor
+  `EF' = EF + (0.1 - (5-g) * (0.08 + (5-g) * 0.02))` clamped to [1.3, 2.5].
+- `due_at` is anchored to the start of the learner's local day: local
+  today (learner timezone) + `intervalDays` days at 00:00.
 
-The queue endpoint returns every exercise whose `due_at <= now()`, ordered by
-`due_at`.
+The review queue endpoint returns every exercise with `due_at <= now()`
+ordered by `due_at`, capped at a configurable daily limit (default 30),
+backfilled with never-seen exercises from the learner's active unit (the
+unit of their most recent session, falling back to the first unit in the
+catalogue).
+
+## Mastery and streaks
+
+- Mastery per lesson = fraction of its exercises with
+  `repetitions >= 3` and `easeFactor >= 2.0`. `GET /api/learners/me/stats`
+  exposes per-lesson and per-unit mastery for the active unit.
+- Streaks update on session completion (not per attempt), using the
+  learner's timezone for the day boundary. Same-day completion does not
+  double-increment; a skipped day resets `current_days` but never lowers
+  `longest_days`.
 
 ## Redis usage
 
 Redis is a cache, never the source of truth:
 
-- `review-queue:{learnerId}` — serialized due-queue JSON, TTL 5 min,
-  invalidated on every new attempt.
+- `queue:{learnerId}` — serialized review queue JSON, TTL 15 min,
+  invalidated on every attempt write.
 - `session-state:{sessionId}` — lightweight study-session cursor (JSON),
   TTL 24 h, refreshed per attempt; the `session`/`attempt` tables remain
   authoritative.
 
-If Redis is unavailable the API still serves queues and sessions straight
-from PostgreSQL (degraded mode).
+If Redis is unavailable or cold the API still serves correct queues and
+sessions straight from PostgreSQL (degraded mode).
 
 ## Auth
 

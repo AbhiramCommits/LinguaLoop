@@ -18,10 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirement(name = "bearerAuth")
 public class LearnerController {
 
-    private final QueueService queueService;
+    private final ReviewQueueService queueService;
     private final StatsService statsService;
 
-    public LearnerController(QueueService queueService, StatsService statsService) {
+    public LearnerController(ReviewQueueService queueService, StatsService statsService) {
         this.queueService = queueService;
         this.statsService = statsService;
     }

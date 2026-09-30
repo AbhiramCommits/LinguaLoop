@@ -49,5 +49,5 @@ app:
       - key: control
         weight: 1.0
   queue:
-    cache-ttl: 5m
-    limit: 50
+    cache-ttl: 15m
+    limit: 30

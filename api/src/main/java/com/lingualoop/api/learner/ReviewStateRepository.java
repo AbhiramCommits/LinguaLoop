@@ -28,4 +28,13 @@ public interface ReviewStateRepository extends JpaRepository<ReviewState, Long> 
     long countByLearnerIdAndDueAtLessThanEqual(Long learnerId, Instant now);
 
     long countByLearnerIdAndIntervalDaysGreaterThanEqual(Long learnerId, double intervalDays);
+
+    @Query("""
+            select count(rs) from ReviewState rs
+            where rs.learner.id = :learnerId
+              and rs.exercise.lesson.id = :lessonId
+              and rs.repetitions >= 3
+              and rs.easeFactor >= 2.0
+            """)
+    long countMasteredInLesson(@Param("learnerId") Long learnerId, @Param("lessonId") Long lessonId);
 }

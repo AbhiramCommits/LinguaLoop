@@ -1,10 +1,14 @@
 package com.lingualoop.api.learner;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.lingualoop.api.audio.AudioAssetDto;
 import com.lingualoop.api.common.config.QueueProperties;
+import com.lingualoop.api.content.Exercise;
+import com.lingualoop.api.content.ExerciseRepository;
+import com.lingualoop.api.content.Unit;
 import com.lingualoop.api.learner.dto.QueueItemDto;
 import com.lingualoop.api.learner.dto.QueueResponse;
 import com.lingualoop.api.learner.dto.ReviewInfoDto;
@@ -18,23 +22,34 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The per-learner review queue is computed from review_state in PostgreSQL
- * (the source of truth) and cached in Redis. Attempts invalidate the cache.
- * Redis failures degrade gracefully to direct database reads.
+ * Builds the per-learner review queue.
+ *
+ * The queue is due review_state rows (due_at <= now, ordered by due_at),
+ * capped at a configurable daily limit, backfilled with never-seen exercises
+ * from the learner's active unit. PostgreSQL is the source of truth; the
+ * assembled queue is cached in Redis under {@code queue:{learnerId}} (TTL
+ * from config, default 15 minutes) purely as a read accelerator. Every
+ * attempt evicts the cache, and a cold or unavailable Redis still yields a
+ * correct queue straight from Postgres.
  */
 @Service
-public class QueueService {
+public class ReviewQueueService {
 
-    private static final Logger log = LoggerFactory.getLogger(QueueService.class);
+    private static final Logger log = LoggerFactory.getLogger(ReviewQueueService.class);
 
     private final ReviewStateRepository reviewStates;
+    private final ExerciseRepository exercises;
+    private final ActiveUnitResolver activeUnitResolver;
     private final QueueProperties properties;
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
 
-    public QueueService(ReviewStateRepository reviewStates, QueueProperties properties,
-            StringRedisTemplate redis, ObjectMapper objectMapper) {
+    public ReviewQueueService(ReviewStateRepository reviewStates, ExerciseRepository exercises,
+            ActiveUnitResolver activeUnitResolver, QueueProperties properties, StringRedisTemplate redis,
+            ObjectMapper objectMapper) {
         this.reviewStates = reviewStates;
+        this.exercises = exercises;
+        this.activeUnitResolver = activeUnitResolver;
         this.properties = properties;
         this.redis = redis;
         this.objectMapper = objectMapper;
@@ -52,10 +67,18 @@ public class QueueService {
             }
         }
 
-        List<ReviewState> due = reviewStates.findDueWithDetails(learnerId, now,
+        List<ReviewState> dueStates = reviewStates.findDueWithDetails(learnerId, now,
                 PageRequest.of(0, properties.limit()));
-        List<QueueItemDto> items = due.stream().map(this::toItem).toList();
-        QueueResponse response = new QueueResponse(items, items.size());
+        List<QueueItemDto> items = new ArrayList<>(dueStates.stream().map(this::toDueItem).toList());
+
+        int remaining = properties.limit() - items.size();
+        if (remaining > 0) {
+            activeUnitResolver.resolve(learnerId).ifPresent(unit ->
+                    exercises.findUnseenInUnit(unit.getId(), learnerId, PageRequest.of(0, remaining))
+                            .forEach(exercise -> items.add(toNewItem(exercise, unit))));
+        }
+
+        QueueResponse response = new QueueResponse(items, dueStates.size());
         writeCache(key, response);
         return response;
     }
@@ -68,7 +91,7 @@ public class QueueService {
         }
     }
 
-    private QueueItemDto toItem(ReviewState state) {
+    private QueueItemDto toDueItem(ReviewState state) {
         var exercise = state.getExercise();
         var lesson = exercise.getLesson();
         var unit = lesson.getUnit();
@@ -85,11 +108,29 @@ public class QueueService {
                 unit.getId(),
                 unit.getTitle(),
                 new ReviewInfoDto(state.getEaseFactor(), state.getIntervalDays(), state.getRepetitions(),
-                        state.getDueAt(), state.getLastGrade(), state.getLapses()));
+                        state.getDueAt(), state.getLastGrade(), state.getLapses()),
+                false);
+    }
+
+    private QueueItemDto toNewItem(Exercise exercise, Unit unit) {
+        return new QueueItemDto(
+                exercise.getId(),
+                exercise.getType(),
+                exercise.getPrompt(),
+                exercise.getAnswer(),
+                exercise.getChoices(),
+                exercise.getCaption(),
+                exercise.getAudioAsset() == null ? null : AudioAssetDto.from(exercise.getAudioAsset()),
+                exercise.getLesson().getId(),
+                exercise.getLesson().getTitle(),
+                unit.getId(),
+                unit.getTitle(),
+                null,
+                true);
     }
 
     private String cacheKey(Long learnerId) {
-        return "review-queue:" + learnerId;
+        return "queue:" + learnerId;
     }
 
     private String readCache(String key) {

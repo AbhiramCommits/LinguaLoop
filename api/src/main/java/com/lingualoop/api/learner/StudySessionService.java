@@ -39,14 +39,14 @@ public class StudySessionService {
     private final VariantService variantService;
     private final SchedulerService schedulerService;
     private final StreakService streakService;
-    private final QueueService queueService;
+    private final ReviewQueueService queueService;
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
 
     public StudySessionService(StudySessionRepository sessions, LearnerRepository learners,
             LessonRepository lessons, ExerciseRepository exercises, AttemptRepository attempts,
             VariantService variantService, SchedulerService schedulerService, StreakService streakService,
-            QueueService queueService, StringRedisTemplate redis, ObjectMapper objectMapper) {
+            ReviewQueueService queueService, StringRedisTemplate redis, ObjectMapper objectMapper) {
         this.sessions = sessions;
         this.learners = learners;
         this.lessons = lessons;
@@ -89,8 +89,8 @@ public class StudySessionService {
         boolean hintShown = Boolean.TRUE.equals(request.hintShown());
         Attempt attempt = attempts.save(
                 new Attempt(session, exercise, request.grade().shortValue(), request.latencyMs(), hintShown));
-        ReviewState reviewState = schedulerService.recordGrade(session.getLearner(), exercise, request.grade(), now);
-        streakService.recordActivity(learnerId, now);
+        ReviewState reviewState = schedulerService.recordGrade(session.getLearner(), exercise, request.grade(),
+                java.time.ZoneId.of(session.getLearner().getTimezone()), now);
 
         long attemptCount = attempts.countBySessionId(sessionId);
         cacheSessionState(session, attemptCount, exercise.getId());
@@ -108,6 +108,7 @@ public class StudySessionService {
         if (session.getEndedAt() == null) {
             session.setEndedAt(Instant.now());
             sessions.save(session);
+            streakService.recordActivity(learnerId, Instant.now());
         }
         evictSessionState(sessionId);
         return new CompleteSessionResponse(

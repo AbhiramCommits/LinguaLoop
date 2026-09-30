@@ -54,7 +54,8 @@ interface QueueItem {
   caption: string | null;
   lessonTitle: string;
   unitTitle: string;
-  review: { repetitions: number; intervalDays: number; easeFactor: number; lastGrade: number | null };
+  review: { repetitions: number; intervalDays: number; easeFactor: number; lastGrade: number | null } | null;
+  new: boolean;
 }
 
 interface Stats {
@@ -65,6 +66,18 @@ interface Stats {
   dueNow: number;
   sessionsCompleted: number;
   streak: { currentDays: number; longestDays: number; lastActiveDate: string | null };
+  unit: {
+    unitId: number;
+    title: string;
+    mastery: number;
+    lessons: {
+      lessonId: number;
+      title: string;
+      mastery: number;
+      masteredExercises: number;
+      totalExercises: number;
+    }[];
+  } | null;
 }
 
 interface Session {
@@ -360,7 +373,8 @@ function App() {
                       [{item.type}] {item.prompt}
                     </strong>{" "}
                     <span className="muted">
-                      {item.unitTitle} · {item.lessonTitle} · reps {item.review.repetitions}
+                      {item.unitTitle} · {item.lessonTitle} ·{" "}
+                      {item.review ? `reps ${item.review.repetitions}` : "new"}
                     </span>
                     <details>
                       <summary>Answer</summary>
@@ -380,6 +394,17 @@ function App() {
                   <li>Average grade: {stats.averageGrade?.toFixed(2) ?? "—"}</li>
                   <li>Due now: {stats.dueNow}</li>
                   <li>Streak: {stats.streak.currentDays} day(s) (longest {stats.streak.longestDays})</li>
+                  {stats.unit && (
+                    <>
+                      <li>Unit mastery ({stats.unit.title}): {(stats.unit.mastery * 100).toFixed(0)}%</li>
+                      {stats.unit.lessons.map((lesson) => (
+                        <li key={lesson.lessonId} className="muted">
+                          {lesson.title}: {lesson.masteredExercises}/{lesson.totalExercises} mastered (
+                          {(lesson.mastery * 100).toFixed(0)}%)
+                        </li>
+                      ))}
+                    </>
+                  )}
                 </ul>
               </>
             )}
