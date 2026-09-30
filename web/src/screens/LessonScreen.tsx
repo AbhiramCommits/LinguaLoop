@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ApiError,
@@ -34,6 +34,7 @@ export function LessonScreen() {
   const { lessonId: lessonIdParam } = useParams();
   const lessonId = Number(lessonIdParam);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const lesson = useLesson(Number.isNaN(lessonId) ? null : lessonId);
   const startSession = useStartSession();
@@ -115,12 +116,16 @@ export function LessonScreen() {
       method: "POST",
     }),
     onSuccess: (summary) => {
+      queryClient.invalidateQueries({ queryKey: ["stats"] });
+      queryClient.invalidateQueries({ queryKey: ["queue"] });
       navigate(`/sessions/${summary.id}/summary`, { state: { summary, lesson: lesson.data } });
     },
     onError: async (err) => {
       if (!session) return;
       if (err instanceof NetworkError || !navigator.onLine) {
         await enqueueOp({ kind: "complete", sessionId: session.id });
+        queryClient.invalidateQueries({ queryKey: ["stats"] });
+        queryClient.invalidateQueries({ queryKey: ["queue"] });
         navigate(`/sessions/${session.id}/summary`, {
           state: { summary: localSummary(), lesson: lesson.data, offline: true },
         });

@@ -66,16 +66,15 @@ export function TranslateExercise({ exercise, disabled, onAnswer, hintDelaySecon
           type="button"
           className="secondary"
           aria-controls={hintId}
+          aria-expanded={hintUsed}
           disabled={disabled || !hint.ready}
           onClick={() => setHintUsed(true)}
         >
           {hint.ready ? "Show hint" : `Hint in ${hint.remaining}s`}
         </button>
-        {hintUsed && (
-          <span id={hintId} className="hint-content">
-            {hintPattern(exercise.answer)}
-          </span>
-        )}
+        <span id={hintId} className="hint-content">
+          {hintUsed ? hintPattern(exercise.answer) : ""}
+        </span>
       </div>
       <button type="submit" disabled={disabled || !value.trim()}>
         Check

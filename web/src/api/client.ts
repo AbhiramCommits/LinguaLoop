@@ -91,6 +91,52 @@ export interface LearnerDto {
   email: string;
   displayName: string;
   timezone: string;
+  role: "LEARNER" | "ADMIN";
+}
+
+export interface ImportLessonResult {
+  title: string;
+  position: number;
+  exerciseCount: number;
+}
+
+export interface ImportResponse {
+  dryRun: boolean;
+  languageCode: string;
+  languageAction: "CREATED" | "REUSED";
+  unitTitle: string;
+  unitAction: "CREATED" | "REPLACED";
+  previousExerciseCount: number;
+  lessons: ImportLessonResult[];
+  lessonCount: number;
+  exerciseCount: number;
+}
+
+export async function postImport(
+  content: string,
+  format: "yaml" | "csv",
+  dryRun: boolean,
+): Promise<ImportResponse> {
+  const headers: Record<string, string> = { "Content-Type": "text/plain" };
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const response = await fetch(`/api/admin/import?format=${format}&dryRun=${dryRun}`, {
+    method: "POST",
+    headers,
+    body: content,
+  });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null);
+    if (problem?.rowErrors) {
+      throw new Error(
+        problem.rowErrors.map((e: { line: number; message: string }) => `line ${e.line}: ${e.message}`).join("\n"),
+      );
+    }
+    throw new Error(problem?.detail ?? `${response.status} ${response.statusText}`);
+  }
+  return response.json() as Promise<ImportResponse>;
 }
 
 export interface AuthResponse {

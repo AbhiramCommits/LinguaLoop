@@ -1,6 +1,7 @@
 import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { OfflineBanner } from "./offline/OfflineBanner";
+import { AuthorScreen } from "./screens/AuthorScreen";
 import { BrowseScreen } from "./screens/BrowseScreen";
 import { ExperimentsScreen } from "./screens/ExperimentsScreen";
 import { HomeScreen } from "./screens/HomeScreen";
@@ -45,6 +46,11 @@ export default function App() {
                 <li>
                   <Link to="/experiments">Experiments</Link>
                 </li>
+                {learner?.role === "ADMIN" && (
+                  <li>
+                    <Link to="/author">Author</Link>
+                  </li>
+                )}
                 <li>
                   <span className="header-learner">{learner?.displayName}</span>
                 </li>
@@ -86,6 +92,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <ExperimentsScreen />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/author"
+            element={
+              <RequireAuth>
+                {learner?.role === "ADMIN" ? <AuthorScreen /> : <Navigate to="/" replace />}
               </RequireAuth>
             }
           />

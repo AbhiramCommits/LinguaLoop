@@ -482,6 +482,108 @@ li {
   margin-top: 16px;
 }
 
+.author-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.author-grid input,
+.author-grid select,
+.author-grid textarea {
+  width: 100%;
+}
+
+textarea {
+  width: 100%;
+  border: 1px solid #c6d0da;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: ui-monospace, monospace;
+  padding: 8px 10px;
+}
+
+select {
+  padding: 7px 10px;
+  border: 1px solid #c6d0da;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+}
+
+.author-lesson {
+  border: 1px solid #dde3e9;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+
+.author-exercise-list {
+  list-style: none;
+  padding: 0;
+}
+
+.author-exercise-list li {
+  border: 1px solid #e4eaf0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  background: #fbfcfe;
+}
+
+.author-exercise-list li.dragging {
+  outline: 2px dashed #123b63;
+  outline-offset: 2px;
+}
+
+.author-exercise-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.author-exercise-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.author-import-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 10px 0;
+}
+
+.author-status {
+  min-height: 22px;
+  color: #1c6b2c;
+  font-weight: 600;
+}
+
+.author-error {
+  background: #fdf0ef;
+  border-left: 4px solid #a61c1c;
+  color: #7c1d1d;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  font-size: 13px;
+}
+
+.author-plan {
+  border: 1px solid #dde3e9;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-top: 12px;
+  background: #f7f9fb;
+}
+
+.author-plan h3 {
+  margin-top: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .progressbar-fill {
     transition: none;
