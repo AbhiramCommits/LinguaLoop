@@ -87,7 +87,8 @@ public class StudySessionService {
 
         Instant now = Instant.now();
         boolean hintShown = Boolean.TRUE.equals(request.hintShown());
-        attempts.save(new Attempt(session, exercise, request.grade().shortValue(), request.latencyMs(), hintShown));
+        Attempt attempt = attempts.save(
+                new Attempt(session, exercise, request.grade().shortValue(), request.latencyMs(), hintShown));
         ReviewState reviewState = schedulerService.recordGrade(session.getLearner(), exercise, request.grade(), now);
         streakService.recordActivity(learnerId, now);
 
@@ -95,7 +96,7 @@ public class StudySessionService {
         cacheSessionState(session, attemptCount, exercise.getId());
         queueService.evict(learnerId);
 
-        return new AttemptResultDto(null, exercise.getId(), request.grade(), new ReviewInfoDto(
+        return new AttemptResultDto(attempt.getId(), exercise.getId(), request.grade(), new ReviewInfoDto(
                 reviewState.getEaseFactor(), reviewState.getIntervalDays(), reviewState.getRepetitions(),
                 reviewState.getDueAt(), reviewState.getLastGrade(), reviewState.getLapses()));
     }
