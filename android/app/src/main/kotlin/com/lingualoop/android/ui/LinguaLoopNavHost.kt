@@ -1,9 +1,12 @@
 package com.lingualoop.android.ui
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
@@ -20,6 +23,8 @@ import com.lingualoop.android.ui.lesson.LessonViewModel
 import com.lingualoop.android.ui.login.LoginScreen
 import com.lingualoop.android.ui.login.LoginViewModel
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 object Routes {
     const val LOGIN = "login"
@@ -32,8 +37,18 @@ object Routes {
 @Composable
 fun LinguaLoopNavHost() {
     val context = LocalContext.current
-    val tokenStore = remember {
-        EntryPointAccessors.fromApplication(context, AppEntryPoint::class.java).tokenStore()
+    // EncryptedSharedPreferences + MasterKey touch the Android Keystore, which
+    // can block; initialize the token store off the main thread so startup
+    // never ANRs on slow devices or emulators.
+    val tokenStoreState = produceState<TokenStore?>(initialValue = null) {
+        value = withContext(Dispatchers.Default) {
+            EntryPointAccessors.fromApplication(context, AppEntryPoint::class.java).tokenStore()
+        }
+    }
+    val tokenStore = tokenStoreState.value
+    if (tokenStore == null) {
+        Box(Modifier.fillMaxSize())
+        return
     }
     val navController = rememberNavController()
     val loggedIn by tokenStore.token.collectAsState()
