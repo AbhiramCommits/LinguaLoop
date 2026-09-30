@@ -55,22 +55,23 @@ what a learner sees on a "review day".
 ## Review scheduling (SM-2 variant)
 
 On every attempt `Sm2Scheduler` (pure, dependency-free) computes the new
-`review_state` values:
+`review_state` values. With grade `g ∈ {0..5}`, current ease factor `EF`,
+interval `I` and repetition count `r`:
 
-- `grade < 3` (failed recall): `repetitions = 0`, `interval_days = 1`,
-  `lapses + 1`, ease factor floored at 1.3.
-- `grade >= 3` (successful recall): `repetitions + 1`; interval 1 day after
-  the first success, 6 days after the second, then
-  `round(intervalDays * easeFactor)`; ease factor
-  `EF' = EF + (0.1 - (5-g) * (0.08 + (5-g) * 0.02))` clamped to [1.3, 2.5].
-- `due_at` is anchored to the start of the learner's local day: local
-  today (learner timezone) + `intervalDays` days at 00:00.
+- `g < 3` (failed recall):
+  - `r' = 0`, `I' = 1` day, `lapses' = lapses + 1`, `EF' = max(1.3, EF)`
+- `g >= 3` (successful recall):
+  - `r' = r + 1`
+  - `EF' = clamp(EF + (0.1 − (5−g)·(0.08 + (5−g)·0.02)), 1.3, 2.5)`
+  - `I' = 1` when `r' = 1`; `I' = 6` when `r' = 2`;
+    otherwise `I' = round(I · EF')`
+- `due_at` is anchored to the learner's local day:
+  `due = localToday(timezone) + I' days` at 00:00 in that timezone.
 
-The review queue endpoint returns every exercise with `due_at <= now()`
-ordered by `due_at`, capped at a configurable daily limit (default 30),
-backfilled with never-seen exercises from the learner's active unit (the
-unit of their most recent session, falling back to the first unit in the
-catalogue).
+The review queue returns exercises with `due_at <= now()` ordered by
+`due_at`, capped at a configurable daily limit (default 30), backfilled
+with never-seen exercises from the learner's active unit — subject to the
+`lesson_ordering` experiment (below).
 
 ## Mastery and streaks
 
@@ -115,6 +116,12 @@ All error responses follow RFC 7807 (`application/problem+json`) with
 deterministic SHA-256 bucketing on first exposure (upsert-safe against
 races), and caches the result in Redis. DRAFT experiments never assign and
 expose no results; STOPPED serves persisted assignments only.
+
+Bucketing math: `u = int64(first 8 bytes of SHA-256("{key}:{learnerId}")) & (2^63-1) / 2^63`
+maps each learner to a uniform value in `[0, 1)`; the variant is the first
+index `i` where `u · Σweights − Σ_{j≤i} weight_j < 0`. Because the
+assignment row is persisted and wins thereafter, later weight edits never
+reshuffle existing learners — the hash only decides first exposure.
 
 - `lesson_ordering` reorders the review queue (`due_first` control vs
   `interleaved` at `config.ratio`).
