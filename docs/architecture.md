@@ -27,7 +27,7 @@ what a learner sees on a "review day".
 | `learner`          | Learners, sessions, attempts, streaks, review queue, stats  |
 | `scheduler`        | SM-2 style scheduling of reviews (`review_state` updates)   |
 | `experiment`       | Session variant assignment for A/B experiments              |
-| `audio`            | Audio asset metadata + static audio file serving            |
+| `audio`            | Content-addressed audio assets + streaming (Opus/MP3)       |
 | `auth`             | JWT issuance/validation, bcrypt password hashing            |
 | `common`           | RFC 7807 error handling, CORS, OpenAPI config               |
 
@@ -37,6 +37,10 @@ what a learner sees on a "review day".
 - `exercise.type` is a PostgreSQL enum: `TRANSLATE`, `MULTIPLE_CHOICE`,
   `LISTEN`. `choices` is `JSONB` (only used by `MULTIPLE_CHOICE`).
   `audio_asset_id`/`caption` are used by `LISTEN` exercises.
+- `audio_asset` (v2) holds pipeline-produced audio: `sha256`, `opus_path`,
+  `mp3_path` (content-addressed relative paths), `duration_ms`, `bytes`.
+  `GET /api/audio/{id}` streams with ETag, immutable caching, Range support
+  and Opus/MP3 Accept negotiation; files live under `APP_AUDIO_DIR`.
 - `learner` holds bcrypt password hashes; registration hashes, never stores,
   plaintext passwords.
 - `review_state` is unique per `(learner_id, exercise_id)` and is the

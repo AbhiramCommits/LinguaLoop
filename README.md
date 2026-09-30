@@ -98,6 +98,7 @@ hardcoded in code. Docker Compose ships dev-only defaults (see
 | `GET /api/learners/me/queue`     | JWT  | Due spaced-repetition review queue           |
 | `GET /api/learners/me/stats`     | JWT  | Retention stats (attempts, mastery, streak)  |
 | `GET /api/audio/assets/{id}`     | —    | Audio asset metadata (LISTEN exercises)      |
+| `GET /api/audio/{id}`            | —    | Stream the asset (Opus/MP3, ETag, Range)     |
 
 Errors are RFC 7807 `application/problem+json`. See
 `docs/architecture.md` for the data model, scheduling algorithm and Redis
@@ -105,8 +106,37 @@ caching design.
 
 ## Audio for LISTEN exercises
 
-The seed registers audio asset metadata whose URLs point to
-`/audio/es/lesson-3/...mp3`. Drop the actual mp3 files into the API's audio
-directory (env `APP_AUDIO_DIR`, default `./audio` in `api/`) and the API will
-serve them. Captions carry full transcripts, so LISTEN exercises remain
-usable before audio files are present.
+Audio is produced by the pipeline in `tools/audio_pipeline.py`:
+
+1. It loudness-normalizes (EBU R128) and transcodes each clip to 64 kbps
+   Opus + 64 kbps MP3 with ffmpeg.
+2. Outputs land in a content-addressed layout
+   (`audio/<sha256[:2]>/<sha256>.<ext>`) under the output dir.
+3. It upserts `audio_asset` rows and links them to exercises — idempotent:
+   re-running on unchanged input creates no new assets.
+
+Generate the Spanish clips from the seed transcripts with Piper TTS (open
+source; the `es_ES-mls_10246-low` voice is derived from Multilingual
+LibriSpeech, CC BY 4.0 — see `CONTENT.md`):
+
+```bash
+cd tools
+uv sync --group tts
+DATABASE_URL="postgresql://lingualoop:lingualoop@localhost:5432/lingualoop" \
+  uv run --group tts -- python audio_pipeline.py --tts \
+    --tts-data-dir tts-models --output-dir ../audio
+```
+
+Or feed your own recordings via a CSV manifest
+(`exercise_id, source_file, transcript`):
+
+```bash
+uv run -- python audio_pipeline.py --manifest clips.csv --sources recordings --output-dir ../audio
+```
+
+The API streams assets from `APP_AUDIO_DIR` (the repo-root `audio/` dir is
+mounted into the API container by Docker Compose) via
+`GET /api/audio/{id}` with ETag, `Cache-Control: public, max-age=31536000,
+immutable`, HTTP Range support and Opus/MP3 Accept negotiation. Audio files
+are gitignored; only their provenance is recorded in `CONTENT.md`.
+
