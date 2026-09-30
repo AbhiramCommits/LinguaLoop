@@ -52,4 +52,12 @@ public class Lesson {
     public int getPosition() {
         return position;
     }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public void setPosition(int position) {
+        this.position = position;
+    }
 }

@@ -105,4 +105,12 @@ public class Exercise {
     public void setCaption(String caption) {
         this.caption = caption;
     }
+
+    public void setPrompt(String prompt) {
+        this.prompt = prompt;
+    }
+
+    public void setAnswer(String answer) {
+        this.answer = answer;
+    }
 }

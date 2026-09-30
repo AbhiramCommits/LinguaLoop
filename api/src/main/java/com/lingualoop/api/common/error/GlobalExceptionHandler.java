@@ -20,6 +20,17 @@ public class GlobalExceptionHandler {
         return build(ex.getStatus(), URI.create(ex.getProblemType()), ex.getMessage());
     }
 
+    @ExceptionHandler(com.lingualoop.api.admin.imports.ImportValidationException.class)
+    ProblemDetail handleImportValidation(com.lingualoop.api.admin.imports.ImportValidationException ex) {
+        ProblemDetail pd = build(HttpStatus.BAD_REQUEST,
+                URI.create("urn:lingualoop:problem:import-validation"),
+                ex.getMessage());
+        pd.setProperty("rowErrors", ex.getErrors().stream()
+                .map(error -> java.util.Map.of("line", error.line(), "message", error.message()))
+                .toList());
+        return pd;
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> fieldErrors = new LinkedHashMap<>();

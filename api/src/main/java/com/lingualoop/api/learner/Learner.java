@@ -4,6 +4,8 @@ import java.time.Instant;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -35,6 +37,10 @@ public class Learner {
 
     @Column(name = "is_simulated", nullable = false)
     private boolean simulated;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    private LearnerRole role = LearnerRole.LEARNER;
 
     protected Learner() {
     }
@@ -83,5 +89,13 @@ public class Learner {
 
     public void setSimulated(boolean simulated) {
         this.simulated = simulated;
+    }
+
+    public LearnerRole getRole() {
+        return role;
+    }
+
+    public void setRole(LearnerRole role) {
+        this.role = role;
     }
 }

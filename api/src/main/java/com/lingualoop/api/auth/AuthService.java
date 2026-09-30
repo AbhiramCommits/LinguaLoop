@@ -4,6 +4,7 @@ import com.lingualoop.api.auth.dto.AuthResponse;
 import com.lingualoop.api.auth.dto.LearnerDto;
 import com.lingualoop.api.auth.dto.LoginRequest;
 import com.lingualoop.api.auth.dto.RegisterRequest;
+import com.lingualoop.api.common.config.AdminProperties;
 import com.lingualoop.api.common.error.BadRequestException;
 import com.lingualoop.api.common.error.ConflictException;
 import com.lingualoop.api.common.error.UnauthorizedException;
@@ -19,11 +20,14 @@ public class AuthService {
     private final LearnerRepository learners;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final AdminProperties adminProperties;
 
-    public AuthService(LearnerRepository learners, PasswordEncoder passwordEncoder, JwtService jwtService) {
+    public AuthService(LearnerRepository learners, PasswordEncoder passwordEncoder, JwtService jwtService,
+            AdminProperties adminProperties) {
         this.learners = learners;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.adminProperties = adminProperties;
     }
 
     @Transactional
@@ -39,11 +43,15 @@ public class AuthService {
         } catch (java.time.DateTimeException ex) {
             throw new BadRequestException("Invalid timezone: " + timezone);
         }
-        Learner learner = learners.save(new Learner(
+        Learner learner = new Learner(
                 request.email().trim().toLowerCase(),
                 request.displayName().trim(),
                 passwordEncoder.encode(request.password()),
-                timezone));
+                timezone);
+        if (adminProperties.emails().contains(learner.getEmail())) {
+            learner.setRole(com.lingualoop.api.learner.LearnerRole.ADMIN);
+        }
+        learner = learners.save(learner);
         return new AuthResponse(jwtService.generateToken(learner), LearnerDto.from(learner));
     }
 

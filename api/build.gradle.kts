@@ -1,8 +1,12 @@
 plugins {
     java
+    jacoco
     id("org.springframework.boot") version "3.5.16"
     id("io.spring.dependency-management") version "1.1.7"
 }
+
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
 
 group = "com.lingualoop"
 version = "0.1.0"
@@ -44,4 +48,51 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+val coveredPackages = listOf(
+    "com/lingualoop/api/scheduler/**",
+    "com/lingualoop/api/experiment/**",
+)
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+    classDirectories.setFrom(
+        sourceSets.main.get().output.asFileTree.matching {
+            coveredPackages.forEach { pattern -> include(pattern) }
+        }
+    )
+}
+
+tasks.register<JacocoCoverageVerification>("jacocoCoverageGate") {
+    dependsOn(tasks.test)
+    classDirectories.setFrom(
+        sourceSets.main.get().output.asFileTree.matching {
+            coveredPackages.forEach { pattern -> include(pattern) }
+        }
+    )
+    executionData.setFrom(
+        tasks.test.map { test ->
+            test.extensions.getByType<JacocoTaskExtension>().destinationFile!!
+        }
+    )
+    violationRules {
+        rule {
+            limit {
+                minimum = "0.75".toBigDecimal()
+            }
+        }
+    }
+}
+
+tasks.check {
+    dependsOn("jacocoCoverageGate")
 }

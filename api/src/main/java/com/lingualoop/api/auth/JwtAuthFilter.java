@@ -29,9 +29,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")) {
             try {
-                Long learnerId = jwtService.parseLearnerId(header.substring(7));
-                var authentication = new UsernamePasswordAuthenticationToken(learnerId, null,
-                        List.of(new SimpleGrantedAuthority("ROLE_LEARNER")));
+                JwtService.Principal principal = jwtService.parsePrincipal(header.substring(7));
+                var authentication = new UsernamePasswordAuthenticationToken(principal.learnerId(), null,
+                        List.of(new SimpleGrantedAuthority("ROLE_" + principal.role())));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             } catch (JwtException | IllegalArgumentException ex) {
                 SecurityContextHolder.clearContext();

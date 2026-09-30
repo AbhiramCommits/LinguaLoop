@@ -12,4 +12,6 @@ public interface UnitRepository extends JpaRepository<Unit, Long> {
     List<Unit> findAllByOrderByLanguageIdAscPositionAsc(Pageable pageable);
 
     long countByLanguageId(Long languageId);
+
+    boolean existsByLanguageIdAndPosition(Long languageId, int position);
 }

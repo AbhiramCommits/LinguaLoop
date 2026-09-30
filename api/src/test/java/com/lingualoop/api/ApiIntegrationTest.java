@@ -537,6 +537,199 @@ class ApiIntegrationTest {
                 ((Number) learner.get("id")).longValue(), email);
     }
 
+    private String registerAndPromoteAdmin(String displayName) {
+        Registration registration = registerLearner(displayName);
+        Learner learner = learners.findById(registration.learnerId()).orElseThrow();
+        learner.setRole(com.lingualoop.api.learner.LearnerRole.ADMIN);
+        learners.save(learner);
+        // Fresh login so the JWT carries the ADMIN role claim.
+        ResponseEntity<Map> login = rest.postForEntity("/api/auth/login",
+                Map.of("email", registration.email(), "password", "password123"), Map.class);
+        return (String) login.getBody().get("token");
+    }
+
+    private HttpHeaders adminHeaders(String adminToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(adminToken);
+        return headers;
+    }
+
+    @Test
+    void adminEndpointsAreRoleGated() {
+        var forbidden = rest.exchange("/api/admin/languages", HttpMethod.POST,
+                new HttpEntity<>(Map.of("code", "xx", "name", "X"), authHeaders()), Map.class);
+        assertThat(forbidden.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void adminCrudWorksEndToEnd() {
+        String admin = registerAndPromoteAdmin("AdminCrud");
+
+        ResponseEntity<Map> language = rest.postForEntity("/api/admin/languages",
+                new HttpEntity<>(Map.of("code", "qa", "name", "Testlang"),
+                        adminHeaders(admin)), Map.class);
+        assertThat(language.getStatusCode()).isEqualTo(HttpStatus.OK);
+        long languageId = ((Number) language.getBody().get("id")).longValue();
+
+        ResponseEntity<Map> unit = rest.postForEntity("/api/admin/units",
+                new HttpEntity<>(Map.of("languageId", languageId, "title", "Unidad admin", "position", 1),
+                        adminHeaders(admin)), Map.class);
+        long unitId = ((Number) unit.getBody().get("id")).longValue();
+
+        ResponseEntity<Map> lesson = rest.postForEntity("/api/admin/lessons",
+                new HttpEntity<>(Map.of("unitId", unitId, "title", "Lección admin", "position", 1),
+                        adminHeaders(admin)), Map.class);
+        long lessonId = ((Number) lesson.getBody().get("id")).longValue();
+
+        ResponseEntity<Map> exercise = rest.postForEntity("/api/admin/exercises",
+                new HttpEntity<>(Map.of("lessonId", lessonId, "type", "TRANSLATE", "prompt", "Hello",
+                        "answer", "Hola", "choices", List.of()), adminHeaders(admin)), Map.class);
+        assertThat(exercise.getStatusCode()).isEqualTo(HttpStatus.OK);
+        long exerciseId = ((Number) exercise.getBody().get("id")).longValue();
+        assertThat(exercise.getBody().get("prompt")).isEqualTo("Hello");
+
+        var updated = rest.exchange("/api/admin/exercises/" + exerciseId, HttpMethod.PUT,
+                new HttpEntity<>(Map.of("lessonId", lessonId, "type", "TRANSLATE", "prompt", "Goodbye",
+                        "answer", "Adiós", "choices", List.of()), adminHeaders(admin)), Map.class);
+        assertThat(updated.getBody().get("prompt")).isEqualTo("Goodbye");
+
+        assertThat(rest.exchange("/api/admin/exercises/" + exerciseId, HttpMethod.DELETE,
+                new HttpEntity<>(adminHeaders(admin)), Map.class).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+        assertThat((List<?>) rest.getForEntity("/api/lessons/" + lessonId, Map.class)
+                .getBody().get("exercises")).isEmpty();
+    }
+
+    @Test
+    void importYamlCreatesAndReplacesUnitsAtomically() {
+        String admin = registerAndPromoteAdmin("AdminImport");
+        String code = "qb";
+        String yaml = """
+                language:
+                  code: %s
+                  name: Importlang
+                unit:
+                  title: Unidad importada
+                  position: 1
+                lessons:
+                  - title: Saludos
+                    position: 1
+                    exercises:
+                      - type: TRANSLATE
+                        prompt: Good morning
+                        answer: Buenos días
+                      - type: MULTIPLE_CHOICE
+                        prompt: What does hola mean?
+                        answer: Hello
+                        choices: [Hello, Goodbye, Please]
+                """.formatted(code);
+
+        var imported = postImport(admin, yaml, "yaml", false);
+        assertThat(imported.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(imported.getBody().get("languageAction")).isEqualTo("CREATED");
+        assertThat(imported.getBody().get("unitAction")).isEqualTo("CREATED");
+        assertThat(imported.getBody().get("exerciseCount")).isEqualTo(2);
+
+        var reimported = postImport(admin, yaml, "yaml", false);
+        assertThat(reimported.getBody().get("languageAction")).isEqualTo("REUSED");
+        assertThat(reimported.getBody().get("unitAction")).isEqualTo("REPLACED");
+        assertThat(((Number) reimported.getBody().get("previousExerciseCount")).longValue()).isEqualTo(2);
+        assertThat(reimported.getBody().get("exerciseCount")).isEqualTo(2);
+
+        var languages = rest.getForEntity("/api/languages", List.class).getBody();
+        assertThat(languages.size()).isGreaterThanOrEqualTo(1);
+        assertThat(languages.stream().map(entry -> ((Map<?, ?>) entry).get("code")).toList())
+                .contains(code);
+
+        // Dry-run must not persist.
+        String dryRunYaml = """
+                language:
+                  code: qc
+                  name: Dryrunlang
+                unit:
+                  title: Unidad dry
+                  position: 1
+                lessons:
+                  - title: Lección
+                    position: 1
+                    exercises:
+                      - type: TRANSLATE
+                        prompt: p
+                        answer: a
+                """;
+        var dryRun = postImport(admin, dryRunYaml, "yaml", true);
+        assertThat(dryRun.getBody().get("dryRun")).isEqualTo(true);
+        assertThat(dryRun.getBody().get("languageAction")).isEqualTo("CREATED");
+        assertThat(rest.getForEntity("/api/languages", List.class).getBody().toString())
+                .doesNotContain("qc");
+    }
+
+    @Test
+    void importValidationReportsLineNumbersAndIsAtomic() {
+        String admin = registerAndPromoteAdmin("AdminValidate");
+        String code = "qd";
+        String yaml = """
+                language:
+                  code: %s
+                  name: Brokenlang
+                unit:
+                  title: Unidad rota
+                  position: 1
+                lessons:
+                  - title: Saludos
+                    position: 1
+                    exercises:
+                      - type: TRANSLATE
+                        prompt: Good morning
+                        answer: Buenos días
+                      - type: MULTIPLE_CHOICE
+                        prompt: Which one?
+                        answer: Not-a-choice
+                        choices: [Hello, Goodbye]
+                      - type: LISTEN
+                        prompt: Listen
+                        answer: Hola
+                        choices: [Hola]
+                """.formatted(code);
+
+        var response = postImport(admin, yaml, "yaml", false);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getHeaders().getContentType().toString()).startsWith("application/problem+json");
+        List<?> rowErrors = (List<?>) response.getBody().get("rowErrors");
+        assertThat(rowErrors).hasSize(2);
+        Map<?, ?> first = (Map<?, ?>) rowErrors.get(0);
+        assertThat((String) first.get("message")).contains("one of the choices");
+        assertThat(((Number) first.get("line")).intValue()).isGreaterThan(0);
+        assertThat((String) ((Map<?, ?>) rowErrors.get(1)).get("message")).contains("must not define choices");
+
+        // Atomicity: nothing was created.
+        assertThat(rest.getForEntity("/api/languages", List.class).getBody().toString()).doesNotContain(code);
+    }
+
+    @Test
+    void importCsvCreatesAUnit() {
+        String admin = registerAndPromoteAdmin("AdminCsv");
+        String code = "qe";
+        String csv = "language_code,language_name,unit_title,unit_position,lesson,position,type,prompt,answer,choices,caption\n"
+                + code + ",Csvlang,Unidad CSV,1,Saludos,1,TRANSLATE,Good morning,Buenos días,,\n"
+                + ",,,,Saludos,1,MULTIPLE_CHOICE,How are you?,¿Cómo estás?,Bien;¿Cómo estás?;Mal,\n"
+                + ",,,,Escuchar,2,LISTEN,Listen,Hola,,Hola\n";
+
+        var response = postImport(admin, csv, "csv", false);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody().get("lessonCount")).isEqualTo(2);
+        assertThat(response.getBody().get("exerciseCount")).isEqualTo(3);
+    }
+
+    private ResponseEntity<Map> postImport(String adminToken, String body, String format, boolean dryRun) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.TEXT_PLAIN);
+        headers.setBearerAuth(adminToken);
+        return rest.postForEntity("/api/admin/import?format=" + format + "&dryRun=" + dryRun,
+                new HttpEntity<>(body, headers), Map.class);
+    }
+
     private void due(Learner learner, Exercise exercise, Instant dueAt) {
         ReviewState state = new ReviewState(learner, exercise, dueAt);
         state.setRepetitions(2);

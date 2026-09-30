@@ -32,14 +32,20 @@ public class JwtService {
         return Jwts.builder()
                 .subject(learner.getId().toString())
                 .claim("email", learner.getEmail())
+                .claim("role", learner.getRole().name())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(properties.ttl())))
                 .signWith(key)
                 .compact();
     }
 
-    public Long parseLearnerId(String token) {
+    public record Principal(Long learnerId, String role) {
+    }
+
+    public Principal parsePrincipal(String token) {
         Claims claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
-        return Long.parseLong(claims.getSubject());
+        Object role = claims.get("role");
+        return new Principal(Long.parseLong(claims.getSubject()),
+                role instanceof String value ? value : "LEARNER");
     }
 }

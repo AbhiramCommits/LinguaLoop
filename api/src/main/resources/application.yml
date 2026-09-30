@@ -47,3 +47,5 @@ app:
   queue:
     cache-ttl: 15m
     limit: 30
+  admin:
+    emails: ${APP_ADMIN_EMAILS:}
