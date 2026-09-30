@@ -51,7 +51,7 @@ import subprocess
 import sys
 import wave
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import psycopg
@@ -117,7 +117,7 @@ def require_ffmpeg() -> None:
 
 
 def run_cmd(args: list[str]) -> subprocess.CompletedProcess:
-    proc = subprocess.run(args, capture_output=True, text=True)
+    proc = subprocess.run(args, capture_output=True, text=True, check=False)
     if proc.returncode != 0:
         raise PipelineError(
             f"Command failed: {' '.join(args)}\n{proc.stderr[-800:]}"
@@ -152,7 +152,7 @@ def probe_duration_ms(path: str | Path, run: callable = run_cmd) -> int:
         proc = subprocess.run(
             [ffprobe, "-v", "error", "-show_entries", "format=duration",
              "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, check=False,
         )
         if proc.returncode == 0 and proc.stdout.strip():
             try:
@@ -160,7 +160,7 @@ def probe_duration_ms(path: str | Path, run: callable = run_cmd) -> int:
             except ValueError:
                 pass
     proc = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-i", str(path)], capture_output=True, text=True
+        ["ffmpeg", "-hide_banner", "-i", str(path)], capture_output=True, text=True, check=False
     )
     match = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", proc.stderr)
     if match:
@@ -393,7 +393,7 @@ def update_content_md(content_md_path: str | Path, engine: str, engine_version: 
     path = Path(content_md_path)
     if path.exists():
         content = path.read_text(encoding="utf-8")
-        pattern = re.compile(marker_start + r".*?" + marker_end, re.S)
+        pattern = re.compile(marker_start + r".*?" + marker_end, re.DOTALL)
         replacement = marker_start + "\n" + block + marker_end
         if pattern.search(content):
             content = pattern.sub(replacement, content)
@@ -430,15 +430,16 @@ def main() -> None:
 
     if args.tts:
         try:
-            import piper.download_voices as download_voices
             from importlib.metadata import version as pkg_version
+
+            from piper import download_voices
             engine_version = pkg_version("piper-tts")
         except ImportError as exc:
             raise PipelineError(
                 "piper-tts is required for --tts mode. Install it with: uv sync --group tts"
             ) from exc
         download_fn = getattr(download_voices, "ensure_voice_exists", None)
-        voice, license_, model_path, cfg_path = load_voice(
+        voice, license_, _model_path, _cfg_path = load_voice(
             args.tts_voice, Path(args.tts_data_dir), download_fn=download_fn)
         print(f"Loaded voice {args.tts_voice} (license: {license_})")
         with psycopg.connect(args.database_url) as conn:
@@ -451,7 +452,7 @@ def main() -> None:
             voice_name=args.tts_voice,
             license_=license_,
             voice_source="https://huggingface.co/rhasspy/piper-voices",
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
         )
         print(f"Updated {args.content_md}")
     else:

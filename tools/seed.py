@@ -176,8 +176,6 @@ UNIT = {
     ],
 }
 
-}
-
 def seed(database_url: str, reset: bool) -> None:
     with psycopg.connect(database_url) as conn:
         conn.execute("SELECT 1")

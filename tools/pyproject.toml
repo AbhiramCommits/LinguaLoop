@@ -14,6 +14,7 @@ default-groups = ["dev"]
 dev = [
     "ruff>=0.9",
     "pytest>=8.3",
+    "pyyaml>=6.0.3",
 ]
 tts = [
     "piper-tts>=1.2",
@@ -22,3 +23,17 @@ tts = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["tests"]
+
+[tool.ruff.lint]
+ignore = [
+    "EXE001", # scripts are run via `uv run`, not executed directly
+    "RUF046", # round() + int() casts are intentional here
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F841", "RUF059"]

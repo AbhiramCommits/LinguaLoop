@@ -38,7 +38,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import psycopg
 
@@ -197,7 +197,7 @@ def main() -> None:
     print(f"Catalogue: {len(lessons)} lessons; using '{primary_lesson['title']}' (id {primary_lesson['id']})")
 
     learners: list[Learner] = []
-    now = datetime.now(timezone.utc).replace(microsecond=0)
+    now = datetime.now(UTC).replace(microsecond=0)
     for index in range(args.learners):
         learner = register_learner(args.api_base, rng, index, run_id)
         offsets = plan_session_offsets(rng, args.window_days)
