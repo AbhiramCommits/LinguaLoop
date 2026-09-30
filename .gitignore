@@ -18,6 +18,7 @@ web/node_modules/
 web/dist/
 web/.vite/
 *.local
+*.tsbuildinfo
 
 # Python
 tools/.venv/
@@ -25,6 +26,11 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+tools/tts-models/
+tools/tts-source/
+
+# Generated audio (content-addressed pipeline output; see CONTENT.md)
+/audio/
 
 # Env / secrets
 .env

@@ -2,13 +2,18 @@ package com.lingualoop.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.lingualoop.api.audio.AudioAsset;
+import com.lingualoop.api.audio.AudioAssetRepository;
 import com.lingualoop.api.content.Exercise;
 import com.lingualoop.api.content.ExerciseRepository;
 import com.lingualoop.api.content.ExerciseType;
@@ -33,6 +38,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpRange;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -78,6 +84,9 @@ class ApiIntegrationTest {
 
     @Autowired
     StringRedisTemplate redisTemplate;
+
+    @Autowired
+    AudioAssetRepository audioAssets;
 
     private Long languageId;
     private Long unitId;
@@ -296,6 +305,78 @@ class ApiIntegrationTest {
     void swaggerAndApiDocsAreExposed() {
         assertThat(rest.getForEntity("/v3/api-docs", String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(rest.getForEntity("/swagger-ui/index.html", String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void audioStreamingSupportsAcceptNegotiationRangesAndCaching() throws Exception {
+        String sha = "ab" + "f".repeat(62);
+        Path dir = Path.of("build", "test-audio", "audio", "ab");
+        Files.createDirectories(dir);
+        byte[] opusBytes = "OPUS-DATA-0123456789".getBytes();
+        byte[] mp3Bytes = "MP3-DATA-abcdefghijklmnopqrstuvwxyz-0123456789".getBytes();
+        Files.write(dir.resolve(sha + ".opus"), opusBytes);
+        Files.write(dir.resolve(sha + ".mp3"), mp3Bytes);
+        AudioAsset asset = audioAssets.save(new AudioAsset(sha,
+                "audio/ab/" + sha + ".opus", "audio/ab/" + sha + ".mp3", 2100, opusBytes.length));
+
+        // Default (no Accept header): Opus with immutable caching
+        ResponseEntity<byte[]> full = rest.getForEntity("/api/audio/" + asset.getId(), byte[].class);
+        assertThat(full.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(full.getHeaders().getContentType().toString()).startsWith("audio/ogg");
+        assertThat(full.getHeaders().getCacheControl()).contains("public").contains("max-age=31536000")
+                .contains("immutable");
+        assertThat(full.getHeaders().getETag()).isEqualTo("\"" + sha + "-opus\"");
+        assertThat(full.getHeaders().getFirst(HttpHeaders.ACCEPT_RANGES)).isEqualTo("bytes");
+        assertThat(full.getBody()).isEqualTo(opusBytes);
+
+        // Accept: audio/mpeg -> MP3 variant
+        HttpHeaders mp3Headers = new HttpHeaders();
+        mp3Headers.setAccept(List.of(MediaType.parseMediaType("audio/mpeg")));
+        ResponseEntity<byte[]> mp3 = rest.exchange("/api/audio/" + asset.getId(), HttpMethod.GET,
+                new HttpEntity<>(mp3Headers), byte[].class);
+        assertThat(mp3.getHeaders().getContentType().toString()).startsWith("audio/mpeg");
+        assertThat(mp3.getHeaders().getETag()).isEqualTo("\"" + sha + "-mp3\"");
+        assertThat(mp3.getBody()).isEqualTo(mp3Bytes);
+
+        // Accept: audio/* -> Opus
+        HttpHeaders anyAudio = new HttpHeaders();
+        anyAudio.setAccept(List.of(MediaType.parseMediaType("audio/*")));
+        ResponseEntity<byte[]> viaWildcard = rest.exchange("/api/audio/" + asset.getId(), HttpMethod.GET,
+                new HttpEntity<>(anyAudio), byte[].class);
+        assertThat(viaWildcard.getHeaders().getContentType().toString()).startsWith("audio/ogg");
+
+        // Byte-range request
+        HttpHeaders rangeHeaders = new HttpHeaders();
+        rangeHeaders.setAccept(List.of(MediaType.parseMediaType("audio/mpeg")));
+        rangeHeaders.setRange(List.of(HttpRange.createByteRange(2, 7)));
+        ResponseEntity<byte[]> range = rest.exchange("/api/audio/" + asset.getId(), HttpMethod.GET,
+                new HttpEntity<>(rangeHeaders), byte[].class);
+        assertThat(range.getStatusCode()).isEqualTo(HttpStatus.PARTIAL_CONTENT);
+        assertThat(range.getHeaders().getFirst(HttpHeaders.CONTENT_RANGE))
+                .isEqualTo("bytes 2-7/" + mp3Bytes.length);
+        assertThat(range.getBody()).isEqualTo(Arrays.copyOfRange(mp3Bytes, 2, 8));
+
+        // Unsatisfiable range -> 416 with bytes */length
+        HttpHeaders badRangeHeaders = new HttpHeaders();
+        badRangeHeaders.setAccept(List.of(MediaType.parseMediaType("audio/mpeg")));
+        badRangeHeaders.setRange(List.of(HttpRange.createByteRange(mp3Bytes.length + 10, mp3Bytes.length + 20)));
+        ResponseEntity<byte[]> unsatisfiable = rest.exchange("/api/audio/" + asset.getId(), HttpMethod.GET,
+                new HttpEntity<>(badRangeHeaders), byte[].class);
+        assertThat(unsatisfiable.getStatusCode()).isEqualTo(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE);
+        assertThat(unsatisfiable.getHeaders().getFirst(HttpHeaders.CONTENT_RANGE))
+                .isEqualTo("bytes */" + mp3Bytes.length);
+
+        // Conditional request -> 304
+        HttpHeaders conditional = new HttpHeaders();
+        conditional.setIfNoneMatch(List.of("\"" + sha + "-opus\""));
+        ResponseEntity<byte[]> notModified = rest.exchange("/api/audio/" + asset.getId(), HttpMethod.GET,
+                new HttpEntity<>(conditional), byte[].class);
+        assertThat(notModified.getStatusCode()).isEqualTo(HttpStatus.NOT_MODIFIED);
+
+        // Unknown asset -> 404 problem details
+        var missing = rest.getForEntity("/api/audio/99999999", Map.class);
+        assertThat(missing.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(missing.getHeaders().getContentType().toString()).startsWith("application/problem+json");
     }
 
     @Test

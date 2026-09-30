@@ -6,5 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AudioAssetRepository extends JpaRepository<AudioAsset, Long> {
 
-    Optional<AudioAsset> findByAssetKey(String assetKey);
+    Optional<AudioAsset> findBySha256(String sha256);
 }
