@@ -72,9 +72,11 @@ cd e2e      && npm ci && npx playwright install chromium && npx playwright test
 The experiments dashboard at `/experiments` reports retention per variant
 (D1/D7 return, second-exposure accuracy, items per session) with two-proportion
 z-test p-values against control. The numbers below are **simulated learners,
-N=121; forgetting model p(recall) = min(1, 2^(−elapsed_days/h) · (1 + 0.35 ·
-prior_successes)), h ~ LogNormal(median=2.0d, σ=0.6); 14-day window; seed=42.
-These are NOT real learner measurements** (see `tools/simulate_learners.py`).
+N=120 (the dashboard's `includeSimulated=true` view also counts a few real
+test accounts, hence n=51+70); forgetting model p(recall) = min(1,
+2^(−elapsed_days/h) · (1 + 0.35 · prior_successes)), h ~ LogNormal(median=2.0d,
+σ=0.6); 14-day window; seed=42. These are NOT real learner measurements**
+(see `tools/simulate_learners.py`).
 
 | Variant | n | D1 return | D1 p-value | D7 return | D7 p-value | 2nd-exposure accuracy |
 | --- | --- | --- | --- | --- | --- | --- |
