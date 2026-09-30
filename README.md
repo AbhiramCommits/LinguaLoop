@@ -99,10 +99,47 @@ hardcoded in code. Docker Compose ships dev-only defaults (see
 | `GET /api/learners/me/stats`     | JWT  | Retention stats (attempts, mastery, streak)  |
 | `GET /api/audio/assets/{id}`     | —    | Audio asset metadata (LISTEN exercises)      |
 | `GET /api/audio/{id}`            | —    | Stream the asset (Opus/MP3, ETag, Range)     |
+| `GET /api/experiments`           | JWT  | Experiment definitions                       |
+| `GET /api/experiments/{key}/results` | JWT | Retention metrics + z-test p-values (DRAFT-guarded) |
 
 Errors are RFC 7807 `application/problem+json`. See
 `docs/architecture.md` for the data model, scheduling algorithm and Redis
 caching design.
+
+## Experiments
+
+A/B experiments live in the `assignment` table: learners are bucketed
+deterministically (SHA-256 of `{experimentKey}:{learnerId}` into weighted
+variant ranges) on first exposure, and the assignment is persisted — so
+weights can change later without reshuffling anyone. Two experiments ship:
+
+- `lesson_ordering` — `due_first` (control, strict SM-2 due order) vs
+  `interleaved` (due + new items mixed at `config.ratio`). Changes the
+  review queue order.
+- `hint_timing` — `hint_at_5s` vs `hint_at_12s`. The delay is returned in
+  the session payload and the web lesson player gates its hint button on it.
+
+Retention results (D1/D7 return rate, second-exposure accuracy, items per
+session, two-proportion z-test p-values against control) are computed from
+real session/attempt data at `GET /api/experiments/{key}/results`, guarded
+against DRAFT experiments, and shown on the `/experiments` page in the web
+app (a variant needs n >= 30 before its row counts as "enough data").
+
+### Simulated learners
+
+`tools/simulate_learners.py` generates synthetic learners that study through
+the real API (register, sessions, attempts, queue, completion) so the
+assignment, scheduler and metrics code paths run end to end; session
+timestamps are then backdated so retention metrics have history. Every
+simulated learner is tagged `learner.is_simulated = true`, and results
+exclude them by default (`?includeSimulated=true` to opt in).
+
+**Anything reported from those runs must carry this label:**
+
+> simulated learners, N=120; forgetting model
+> p(recall)=min(1, 2^(-elapsed_days/h)·(1+0.35·prior_successes)),
+> h ~ LogNormal(median=2.0d, sigma=0.6); window=14 days; seed=42.
+> NOT real learner measurements.
 
 ## Audio for LISTEN exercises
 

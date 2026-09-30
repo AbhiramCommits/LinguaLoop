@@ -109,6 +109,19 @@ All error responses follow RFC 7807 (`application/problem+json`) with
 
 ## Experiments
 
-`POST /api/sessions` assigns a `variant_key` from a weighted list configured
-in `application.yml` (`app.experiment.variants`). All client behavior driven
-by the variant key is implemented in clients, keeping the API neutral.
+`experiment` → `variant` (weighted, JSONB config, explicit control flag) →
+`assignment` (unique per learner+experiment, persisted on first exposure).
+`ExperimentClient.variantFor()` resolves DB-first, falls back to
+deterministic SHA-256 bucketing on first exposure (upsert-safe against
+races), and caches the result in Redis. DRAFT experiments never assign and
+expose no results; STOPPED serves persisted assignments only.
+
+- `lesson_ordering` reorders the review queue (`due_first` control vs
+  `interleaved` at `config.ratio`).
+- `hint_timing` sets `session.hint_delay_seconds`, which the web lesson
+  player honors before enabling hints.
+
+Retention metrics (D1/D7 return rate in UTC, second-exposure accuracy,
+items per session) are computed from real session/attempt data with a
+two-proportion z-test against control; simulated learners
+(`learner.is_simulated`) are excluded unless explicitly requested.
