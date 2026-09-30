@@ -18,7 +18,7 @@ as the repository (MIT).
 - Voice: es_ES-mls_10246-low
 - Voice license: Multilingual LibriSpeech (MLS), CC BY 4.0 (permits redistribution)
 - Voice source: https://huggingface.co/rhasspy/piper-voices
-- Generated: 2026-09-30T00:52:43.969176+00:00
+- Generated: 2026-09-30T08:23:41.451947+00:00
 - Storage: content-addressed files under `audio/<sha256[:2]>/<sha256>.<ext>`
   (64 kbps Opus + 64 kbps MP3 fallback). Audio files are not committed to git.
 - License of the generated clips: derivatives of the voice model, they
