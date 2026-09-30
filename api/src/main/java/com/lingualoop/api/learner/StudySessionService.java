@@ -10,7 +10,7 @@ import com.lingualoop.api.content.Exercise;
 import com.lingualoop.api.content.ExerciseRepository;
 import com.lingualoop.api.content.Lesson;
 import com.lingualoop.api.content.LessonRepository;
-import com.lingualoop.api.experiment.VariantService;
+import com.lingualoop.api.experiment.ExperimentClient;
 import com.lingualoop.api.learner.dto.AttemptRequest;
 import com.lingualoop.api.learner.dto.AttemptResultDto;
 import com.lingualoop.api.learner.dto.CompleteSessionResponse;
@@ -36,7 +36,7 @@ public class StudySessionService {
     private final LessonRepository lessons;
     private final ExerciseRepository exercises;
     private final AttemptRepository attempts;
-    private final VariantService variantService;
+    private final ExperimentClient experimentClient;
     private final SchedulerService schedulerService;
     private final StreakService streakService;
     private final ReviewQueueService queueService;
@@ -45,14 +45,14 @@ public class StudySessionService {
 
     public StudySessionService(StudySessionRepository sessions, LearnerRepository learners,
             LessonRepository lessons, ExerciseRepository exercises, AttemptRepository attempts,
-            VariantService variantService, SchedulerService schedulerService, StreakService streakService,
+            ExperimentClient experimentClient, SchedulerService schedulerService, StreakService streakService,
             ReviewQueueService queueService, StringRedisTemplate redis, ObjectMapper objectMapper) {
         this.sessions = sessions;
         this.learners = learners;
         this.lessons = lessons;
         this.exercises = exercises;
         this.attempts = attempts;
-        this.variantService = variantService;
+        this.experimentClient = experimentClient;
         this.schedulerService = schedulerService;
         this.streakService = streakService;
         this.queueService = queueService;
@@ -66,10 +66,32 @@ public class StudySessionService {
                 .orElseThrow(() -> new NotFoundException("Learner " + learnerId + " not found"));
         Lesson lesson = lessons.findById(lessonId)
                 .orElseThrow(() -> new NotFoundException("Lesson " + lessonId + " not found"));
-        StudySession session = sessions.save(new StudySession(learner, lesson, variantService.assignVariant()));
+        Integer hintDelaySeconds = resolveHintDelay(learnerId);
+        StudySession session = sessions.save(new StudySession(learner, lesson, null, hintDelaySeconds));
         long exerciseCount = exercises.countByLessonId(lessonId);
         cacheSessionState(session, 0, null);
-        return new SessionDto(session.getId(), lessonId, session.getVariantKey(), session.getStartedAt(), exerciseCount);
+        return new SessionDto(session.getId(), lessonId, session.getVariantKey(), hintDelaySeconds,
+                session.getStartedAt(), exerciseCount);
+    }
+
+    /**
+     * hint_timing experiment: the session payload carries how long the lesson
+     * player waits before offering a hint. Missing/misconfigured experiments
+     * degrade to the control delay of 5 seconds.
+     */
+    private Integer resolveHintDelay(Long learnerId) {
+        try {
+            HintTimingConfig config = experimentClient.configFor(learnerId, "hint_timing", HintTimingConfig.class);
+            if (config != null && config.delaySeconds() != null && config.delaySeconds() >= 0) {
+                return config.delaySeconds();
+            }
+        } catch (RuntimeException ex) {
+            log.debug("hint_timing experiment unavailable; defaulting hint delay", ex);
+        }
+        return 5;
+    }
+
+    public record HintTimingConfig(Integer delaySeconds) {
     }
 
     @Transactional

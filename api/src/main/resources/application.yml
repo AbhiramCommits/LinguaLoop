@@ -44,10 +44,6 @@ app:
     allowed-origins: ${APP_CORS_ORIGINS:http://localhost:5173}
   audio:
     directory: ${APP_AUDIO_DIR:./audio}
-  experiment:
-    variants:
-      - key: control
-        weight: 1.0
   queue:
     cache-ttl: 15m
     limit: 30

@@ -23,6 +23,11 @@ import com.lingualoop.api.content.Lesson;
 import com.lingualoop.api.content.LessonRepository;
 import com.lingualoop.api.content.Unit;
 import com.lingualoop.api.content.UnitRepository;
+import com.lingualoop.api.experiment.Assignment;
+import com.lingualoop.api.experiment.AssignmentRepository;
+import com.lingualoop.api.experiment.Experiment;
+import com.lingualoop.api.experiment.ExperimentRepository;
+import com.lingualoop.api.experiment.ExperimentStatus;
 import com.lingualoop.api.learner.Learner;
 import com.lingualoop.api.learner.LearnerRepository;
 import com.lingualoop.api.learner.ReviewState;
@@ -87,6 +92,12 @@ class ApiIntegrationTest {
 
     @Autowired
     AudioAssetRepository audioAssets;
+
+    @Autowired
+    ExperimentRepository experimentRepo;
+
+    @Autowired
+    AssignmentRepository assignmentRepo;
 
     private Long languageId;
     private Long unitId;
@@ -396,6 +407,150 @@ class ApiIntegrationTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    @Test
+    void lessonOrderingVariantsProduceDifferentQueueOrders() {
+        Language language = languages.save(new Language("t" + languageCounter.getAndIncrement(), "Spanish"));
+        Unit unit = units.save(new Unit(language, "Unidad de orden", 1));
+        Lesson lesson = lessons.save(new Lesson(unit, "Lección de orden", 1));
+        Exercise first = exercises.save(new Exercise(lesson, ExerciseType.TRANSLATE, "p1", "a1"));
+        Exercise second = exercises.save(new Exercise(lesson, ExerciseType.TRANSLATE, "p2", "a2"));
+        Exercise third = exercises.save(new Exercise(lesson, ExerciseType.TRANSLATE, "p3", "a3"));
+        Exercise fourth = exercises.save(new Exercise(lesson, ExerciseType.TRANSLATE, "p4", "a4"));
+
+        Registration dueFirst = registerLearner("DueFirst");
+        Registration interleaved = registerLearner("Interleaved");
+
+        Learner dueFirstLearner = learners.findById(dueFirst.learnerId()).orElseThrow();
+        Learner interleavedLearner = learners.findById(interleaved.learnerId()).orElseThrow();
+        assignmentRepo.save(new Assignment(dueFirstLearner, "lesson_ordering", "due_first"));
+        assignmentRepo.save(new Assignment(interleavedLearner, "lesson_ordering", "interleaved"));
+
+        Instant now = Instant.now();
+        due(dueFirstLearner, first, now.minusSeconds(7200));
+        due(dueFirstLearner, second, now.minusSeconds(3600));
+        due(interleavedLearner, first, now.minusSeconds(7200));
+        due(interleavedLearner, second, now.minusSeconds(3600));
+
+        startSessionFor(dueFirst.token(), lesson.getId());
+        startSessionFor(interleaved.token(), lesson.getId());
+
+        List<?> controlItems = (List<?>) authedGetAs(dueFirst.token(), "/api/learners/me/queue").getBody().get("items");
+        List<?> treatmentItems = (List<?>) authedGetAs(interleaved.token(), "/api/learners/me/queue").getBody()
+                .get("items");
+
+        List<Long> controlOrder = controlItems.stream()
+                .map(item -> ((Number) ((Map<?, ?>) item).get("exerciseId")).longValue()).toList();
+        List<Long> treatmentOrder = treatmentItems.stream()
+                .map(item -> ((Number) ((Map<?, ?>) item).get("exerciseId")).longValue()).toList();
+
+        // Control: strict due order (first, second) then unseen (third, fourth)
+        assertThat(controlOrder).containsExactly(first.getId(), second.getId(), third.getId(), fourth.getId());
+        // Interleaved (ratio 0.5): due, new, due, new
+        assertThat(treatmentOrder).containsExactly(first.getId(), third.getId(), second.getId(), fourth.getId());
+        assertThat(controlOrder).isNotEqualTo(treatmentOrder);
+    }
+
+    @Test
+    void assignmentIsStableAndPersistedOnFirstExposure() {
+        var queueFirst = authedGet("/api/learners/me/queue");
+        var queueSecond = authedGet("/api/learners/me/queue");
+
+        List<Long> first = ((List<?>) queueFirst.getBody().get("items")).stream()
+                .map(item -> ((Number) ((Map<?, ?>) item).get("exerciseId")).longValue()).toList();
+        List<Long> second = ((List<?>) queueSecond.getBody().get("items")).stream()
+                .map(item -> ((Number) ((Map<?, ?>) item).get("exerciseId")).longValue()).toList();
+        assertThat(first).isEqualTo(second);
+
+        Assignment persisted = assignmentRepo.findByLearnerIdAndExperimentKey(learnerId, "lesson_ordering")
+                .orElseThrow();
+        assertThat(persisted.getVariantKey()).isIn("due_first", "interleaved");
+    }
+
+    @Test
+    void draftExperimentResultsAreGuarded() {
+        String key = "draft-" + System.nanoTime();
+        experimentRepo.save(new Experiment(key, "draft experiment", ExperimentStatus.DRAFT));
+
+        var response = authedGet("/api/experiments/" + key + "/results");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getHeaders().getContentType().toString()).startsWith("application/problem+json");
+    }
+
+    @Test
+    void resultsEndpointExcludesSimulatedLearnersByDefault() {
+        Registration simulated = registerLearner("Simulated");
+        Learner learner = learners.findById(simulated.learnerId()).orElseThrow();
+        learner.setSimulated(true);
+        learners.save(learner);
+        assignmentRepo.save(new Assignment(learner, "lesson_ordering", "due_first"));
+        startSessionFor(simulated.token(), lessonId);
+
+        var realResults = authedGet("/api/experiments/lesson_ordering/results");
+        assertThat(realResults.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(realResults.getBody().get("includeSimulated")).isEqualTo(false);
+        Map<Object, Long> realCounts = variantCounts(realResults);
+
+        var simulatedResults = authedGet("/api/experiments/lesson_ordering/results?includeSimulated=true");
+        Map<Object, Long> simulatedCounts = variantCounts(simulatedResults);
+
+        assertThat(simulatedCounts.get("due_first")).isEqualTo(realCounts.get("due_first") + 1);
+        assertThat(simulatedCounts.get("interleaved")).isEqualTo(realCounts.get("interleaved"));
+    }
+
+    @Test
+    void experimentListIsExposed() {
+        ResponseEntity<List> response = rest.exchange("/api/experiments", HttpMethod.GET,
+                new HttpEntity<>(authHeaders()), List.class);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        List<String> keys = ((List<?>) response.getBody()).stream()
+                .map(experiment -> (String) ((Map<?, ?>) experiment).get("key")).toList();
+        assertThat(keys).contains("lesson_ordering", "hint_timing");
+    }
+
+    private static Map<Object, Long> variantCounts(ResponseEntity<Map> results) {
+        Map<Object, Long> counts = new java.util.HashMap<>();
+        for (Object row : (List<?>) results.getBody().get("variants")) {
+            Map<?, ?> variant = (Map<?, ?>) row;
+            counts.put(variant.get("key"), ((Number) variant.get("n")).longValue());
+        }
+        return counts;
+    }
+
+    @Test
+    void hintTimingVariantIsReturnedInTheSessionPayload() {
+        Map session = startSession();
+        assertThat(session.get("hintDelaySeconds")).isIn(5, 12);
+    }
+
+    private record Registration(String token, Long learnerId, String email) {
+    }
+
+    private Registration registerLearner(String displayName) {
+        String email = "learner-" + System.nanoTime() + "@example.com";
+        rest.postForEntity("/api/auth/register",
+                Map.of("email", email, "password", "password123", "displayName", displayName, "timezone", "UTC"),
+                Map.class);
+        ResponseEntity<Map> login = rest.postForEntity("/api/auth/login",
+                Map.of("email", email, "password", "password123"), Map.class);
+        Map<String, Object> learner = (Map<String, Object>) login.getBody().get("learner");
+        return new Registration((String) login.getBody().get("token"),
+                ((Number) learner.get("id")).longValue(), email);
+    }
+
+    private void due(Learner learner, Exercise exercise, Instant dueAt) {
+        ReviewState state = new ReviewState(learner, exercise, dueAt);
+        state.setRepetitions(2);
+        state.setIntervalDays(6);
+        reviewStates.save(state);
+    }
+
+    private ResponseEntity<Map> authedGetAs(String tokenValue, String path) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(tokenValue);
+        return rest.exchange(path, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+    }
+
     private String registerAndLogin() {
         email = "learner-" + System.nanoTime() + "@example.com";
         rest.postForEntity("/api/auth/register",
@@ -421,12 +576,19 @@ class ApiIntegrationTest {
     }
 
     private Map startSession() {
-        return startSessionFor(lessonId);
+        return startSessionFor(token, lessonId);
     }
 
     private Map startSessionFor(long sessionLessonId) {
+        return startSessionFor(token, sessionLessonId);
+    }
+
+    private Map startSessionFor(String tokenValue, long sessionLessonId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(tokenValue);
         ResponseEntity<Map> response = rest.postForEntity("/api/sessions",
-                new HttpEntity<>(Map.of("lessonId", sessionLessonId), authHeaders()), Map.class);
+                new HttpEntity<>(Map.of("lessonId", sessionLessonId), headers), Map.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         return response.getBody();
     }

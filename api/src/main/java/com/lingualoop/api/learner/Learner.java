@@ -33,6 +33,9 @@ public class Learner {
     @Column(nullable = false, length = 64)
     private String timezone = "UTC";
 
+    @Column(name = "is_simulated", nullable = false)
+    private boolean simulated;
+
     protected Learner() {
     }
 
@@ -72,5 +75,13 @@ public class Learner {
 
     public String getTimezone() {
         return timezone;
+    }
+
+    public boolean isSimulated() {
+        return simulated;
+    }
+
+    public void setSimulated(boolean simulated) {
+        this.simulated = simulated;
     }
 }

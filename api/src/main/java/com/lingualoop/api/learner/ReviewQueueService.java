@@ -9,6 +9,7 @@ import com.lingualoop.api.common.config.QueueProperties;
 import com.lingualoop.api.content.Exercise;
 import com.lingualoop.api.content.ExerciseRepository;
 import com.lingualoop.api.content.Unit;
+import com.lingualoop.api.experiment.ExperimentClient;
 import com.lingualoop.api.learner.dto.QueueItemDto;
 import com.lingualoop.api.learner.dto.QueueResponse;
 import com.lingualoop.api.learner.dto.ReviewInfoDto;
@@ -43,19 +44,25 @@ public class ReviewQueueService {
     private final QueueProperties properties;
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
+    private final ExperimentClient experimentClient;
 
     public ReviewQueueService(ReviewStateRepository reviewStates, ExerciseRepository exercises,
             ActiveUnitResolver activeUnitResolver, QueueProperties properties, StringRedisTemplate redis,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper, ExperimentClient experimentClient) {
         this.reviewStates = reviewStates;
         this.exercises = exercises;
         this.activeUnitResolver = activeUnitResolver;
         this.properties = properties;
         this.redis = redis;
         this.objectMapper = objectMapper;
+        this.experimentClient = experimentClient;
     }
 
-    @Transactional(readOnly = true)
+    /**
+     * Read-write: the first queue read is the first exposure to the
+     * lesson_ordering experiment, which persists the learner's assignment.
+     */
+    @Transactional
     public QueueResponse getQueue(Long learnerId, Instant now) {
         String key = cacheKey(learnerId);
         String cached = readCache(key);
@@ -69,18 +76,64 @@ public class ReviewQueueService {
 
         List<ReviewState> dueStates = reviewStates.findDueWithDetails(learnerId, now,
                 PageRequest.of(0, properties.limit()));
-        List<QueueItemDto> items = new ArrayList<>(dueStates.stream().map(this::toDueItem).toList());
+        List<QueueItemDto> dueItems = dueStates.stream().map(this::toDueItem).toList();
 
-        int remaining = properties.limit() - items.size();
+        int remaining = properties.limit() - dueItems.size();
+        List<QueueItemDto> newItems = new ArrayList<>();
         if (remaining > 0) {
             activeUnitResolver.resolve(learnerId).ifPresent(unit ->
                     exercises.findUnseenInUnit(unit.getId(), learnerId, PageRequest.of(0, remaining))
-                            .forEach(exercise -> items.add(toNewItem(exercise, unit))));
+                            .forEach(exercise -> newItems.add(toNewItem(exercise, unit))));
         }
+
+        List<QueueItemDto> items = orderForVariant(learnerId, dueItems, newItems);
 
         QueueResponse response = new QueueResponse(items, dueStates.size());
         writeCache(key, response);
         return response;
+    }
+
+    /**
+     * lesson_ordering experiment: control ("due_first") keeps strict SM-2 due
+     * order followed by new items; "interleaved" mixes due and new items at
+     * the configured ratio (config.ratio = share of new items). Degrades to
+     * due-first when one of the lists is empty.
+     */
+    private List<QueueItemDto> orderForVariant(Long learnerId, List<QueueItemDto> dueItems,
+            List<QueueItemDto> newItems) {
+        double ratio = 0.0;
+        try {
+            InterleaveConfig config = experimentClient.configFor(learnerId, "lesson_ordering",
+                    InterleaveConfig.class);
+            if (config != null && config.ratio() > 0) {
+                ratio = config.ratio();
+            }
+        } catch (RuntimeException ex) {
+            log.debug("lesson_ordering experiment unavailable; falling back to due-first", ex);
+        }
+        if (ratio <= 0 || dueItems.isEmpty() || newItems.isEmpty()) {
+            List<QueueItemDto> combined = new ArrayList<>(dueItems.size() + newItems.size());
+            combined.addAll(dueItems);
+            combined.addAll(newItems);
+            return combined;
+        }
+
+        int duePerNew = Math.max(1, (int) Math.round((1.0 - ratio) / ratio));
+        List<QueueItemDto> interleaved = new ArrayList<>(dueItems.size() + newItems.size());
+        int dueIndex = 0;
+        int newIndex = 0;
+        while (dueIndex < dueItems.size() || newIndex < newItems.size()) {
+            for (int i = 0; i < duePerNew && dueIndex < dueItems.size(); i++) {
+                interleaved.add(dueItems.get(dueIndex++));
+            }
+            if (newIndex < newItems.size()) {
+                interleaved.add(newItems.get(newIndex++));
+            }
+        }
+        return interleaved.subList(0, Math.min(interleaved.size(), properties.limit()));
+    }
+
+    public record InterleaveConfig(double ratio) {
     }
 
     public void evict(Long learnerId) {

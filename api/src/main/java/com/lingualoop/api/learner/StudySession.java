@@ -39,13 +39,17 @@ public class StudySession {
     @Column(name = "variant_key", length = 64)
     private String variantKey;
 
+    @Column(name = "hint_delay_seconds")
+    private Integer hintDelaySeconds;
+
     protected StudySession() {
     }
 
-    public StudySession(Learner learner, Lesson lesson, String variantKey) {
+    public StudySession(Learner learner, Lesson lesson, String variantKey, Integer hintDelaySeconds) {
         this.learner = learner;
         this.lesson = lesson;
         this.variantKey = variantKey;
+        this.hintDelaySeconds = hintDelaySeconds;
     }
 
     @PrePersist
@@ -81,5 +85,9 @@ public class StudySession {
 
     public String getVariantKey() {
         return variantKey;
+    }
+
+    public Integer getHintDelaySeconds() {
+        return hintDelaySeconds;
     }
 }
